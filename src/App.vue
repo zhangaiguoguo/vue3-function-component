@@ -1,7 +1,7 @@
 <script setup lang="tsx">
 import HelloWorld from '@/components/HelloWorld.vue'
 import {createVNode, h, onMounted, ref, withModifiers} from "vue";
-import {useEffect, useRef, useState} from "@/hooks";
+import {useEffect, useMemo, useRef, useState} from "@/hooks";
 
 const msg = ref('Vite + Vue')
 const count = ref(1)
@@ -15,9 +15,12 @@ defineExpose({
 
 function AAChild(props, context) {
     const [num, setNum] = useState(1)
+    const currentRef = useRef()
+    const numComputed = useMemo(() => num + "->>", [num])
+    console.log(currentRef)
     return <>
         <div>
-            <h1>{props.index}</h1>
+            <h1 ref={currentRef}>{props.index}</h1>
             <br/>
             <button onClick={() => setNum(num + 1)}>点击{num}</button>
         </div>
@@ -78,13 +81,13 @@ const A = {
 </script>
 
 <template>
-      <button @click="count++">点击{{ count }}</button>
+    <button @click="count++">点击{{ count }}</button>
   <!--    <HelloWorld :msg="msg" v-if="count % 2"/>-->
   <!--    <h1 :num="count">-&#45;&#45;&#45;&#45;&#45;&#45;&#45;&#45;</h1>-->
   <!--    <b>1231</b>-->
   <!--    <HelloWorld :msg="msg"/>-->
-<!--    <A/>-->
-  <AA/>
+  <!--    <A/>-->
+    <AA/>
 </template>
 
 <style scoped>
