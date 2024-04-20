@@ -1,5 +1,13 @@
 import type {SetupContext} from "vue"
-import {ComponentInternalInstance, customRef, getCurrentInstance, isReactive, isRef, nextTick, ref, toValue} from "vue";
+import {
+    ComponentInternalInstance,
+    customRef,
+    getCurrentInstance,
+    isRef,
+    nextTick,
+    ref, toValue,
+    warn
+} from "vue";
 import {is, transformFunction} from "@/hooks/utils";
 
 const modelPropsMsp = new WeakMap();
@@ -177,7 +185,7 @@ function _createState<T>(target: T, options: StateItemStateOption) {
         options: options || null,
         add<T>(v: T) {
             const lastCurrentState = last(this.history)
-            if (isReactive(lastCurrentState) || isRef(lastCurrentState)) {
+            if (isRef(lastCurrentState)) {
                 lastCurrentState.value = v
             } else {
                 if (this.history.length > 2) {
@@ -189,7 +197,7 @@ function _createState<T>(target: T, options: StateItemStateOption) {
     }
     def(state, 'value', {
         get() {
-            return last(state.history)
+            return toRefValue(last(state.history))
         }
     })
     return state
@@ -241,8 +249,8 @@ function scopeTaskStateScheduler(renderHandler: Function) {
         try {
             result = renderHandler(props, context)
             resultExamineStateTasks()
-        } catch (err) {
-            console.error(err)
+        } catch (err: any) {
+            warn(err.message)
         } finally {
             currentState = null
         }
@@ -261,6 +269,10 @@ type StateItemStateOption = {
 
 type createCurrentStateResult = [any, <T>(v: T) => void]
 
+export function toRefValue(target: any) {
+    return isRef(target) ? toValue(target) : target
+}
+
 function createCurrentState<T>(initState: T | (() => T), options: StateItemStateOption = {
     isToRef: true
 }): createCurrentStateResult | void {
@@ -273,9 +285,9 @@ function createCurrentState<T>(initState: T | (() => T), options: StateItemState
             const state = _currentState.state
             let current = state[currentSub] || state[state.push(_createState(options.isToRef ? ref(initState()) : initState(), options)) - 1];
             const _options = current.options || options
-            current._scheduler = current._scheduler || (_options && _options.scheduler) || _currentState.scheduler || currentScheduler;
-            return [options.isToRef ? toValue(current.value) : current.value, (current.scheduler || (current.scheduler = async <T>(value: T) => {
-                if (!is(value, toValue(current.value))) {
+            current._scheduler = current._scheduler || (_options && _options.scheduler) || currentScheduler;
+            return [current.value, (current.scheduler || (current.scheduler = async <T>(value: T) => {
+                if (!is(value, current.value)) {
                     let isSetStateFlag = true
                     if (current._scheduler) {
                         isSetStateFlag = await current._scheduler()
@@ -426,7 +438,7 @@ function useMemo(target: Function, deps?: effectArgDepTs) {
 
 function useId() {
     if (_judgeCurrentState()) return
-    return `:rud${currentState && currentState.refId++}`
+    return `:vid${currentState && ++currentState.refId}`
 }
 
 function useSyncExternalStore(subscribe: Function, getSnapshot: Function) {
@@ -453,20 +465,22 @@ function useLayoutEffect<T extends effectArgTs, T2 extends effectArgDepTs>(targe
     return useEffectPre(target, deps)
 }
 
+const useReducerOptions = {
+    isToRef: false
+}
+
 // @ts-ignore
-function useReducer<TT, TT2>(reducer: <T>(arg: T, arg2: object) => T, initialArg: never, init: (v: TT2) => any) {
+function useReducer<TT, TT2>(reducer: <T>(arg: T, arg2: object) => T, initialArg: TT2, init?: (v: TT2) => any): [TT2, (arg: object) => void] | void {
     if (_judgeCurrentState()) return
-    const [isInit, setInit] = createCurrentState(false, {
-        scheduler() {
-        },
-        isToRef: false
-    }) as createCurrentStateResult
-    const _store = (typeof init === "function" && !isInit ? !(setInit as Function)(true) && init(initialArg) : initialArg)
-    let [store, setStore] = createCurrentState(_store, {}) as createCurrentStateResult
-    const updateScheduler = useCallback((target: object) => {
-        setStore(reducer(store, target))
-    })
-    return [store, updateScheduler]
+    const [isInit, setInit] = createCurrentState(false, useReducerOptions) as createCurrentStateResult
+    if (typeof init === "function" && !isInit) {
+        initialArg = init(initialArg)
+        setInit(true)
+    }
+    let [state, setState] = createCurrentState(initialArg) as createCurrentStateResult;
+    return [state, useCallback((target: object) => {
+        typeof target === "object" && setState(reducer(state, target))
+    }, [state])]
 }
 
 function memo(component: Function, callback: effectArgDepTs) {
@@ -504,9 +518,14 @@ function memo(component: Function, callback: effectArgDepTs) {
 }
 
 function useRef(target: any = null) {
-    return (createCurrentState(ref(arguments.length ? target : null), {
+    const [get, set] = createCurrentState(arguments.length ? target : null, {
         isToRef: false
-    }) as any)[0]
+    }) as any;
+    const currentRef = isRef(get) ? get : ref(get)
+    if (currentRef !== get) {
+        set(currentRef)
+    }
+    return currentRef
 }
 
 export {

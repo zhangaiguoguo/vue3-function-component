@@ -1,7 +1,8 @@
 <script setup lang="tsx">
 import HelloWorld from '@/components/HelloWorld.vue'
 import {createVNode, h, onMounted, ref, withModifiers} from "vue";
-import {useEffect, useMemo, useRef, useState} from "@/hooks";
+import {useCallback, useEffect, useId, useMemo, useReducer, useRef, useState, useUpdate} from "@/hooks";
+import {isFunction, transformArray} from "@/hooks/utils.ts";
 
 const msg = ref('Vite + Vue')
 const count = ref(1)
@@ -13,19 +14,58 @@ defineExpose({
     msg
 })
 
+
 function AAChild(props, context) {
+    const [state, dispatch] = useReducer((state, type) => {
+        switch (type.type) {
+            case "setCount":
+                state.count++
+                break
+        }
+        return state
+    }, {count: 1})
     const [num, setNum] = useState(1)
-    const currentRef = useRef()
-    const numComputed = useMemo(() => num + "->>", [num])
-    console.log(currentRef)
+    const currentRef = useRef(1)
+    const numComputed = useMemo(() => {
+        return num + "->>" + (state && state.count)
+    }, [num, state])
+    const onClick = useCallback(() => {
+        dispatch({
+            type: 'setCount'
+        })
+        setNum(num + 1)
+    }, [num, state])
     return <>
-        <div>
+        <div key={useId()}>
             <h1 ref={currentRef}>{props.index}</h1>
             <br/>
-            <button onClick={() => setNum(num + 1)}>点击{num}</button>
+            <button onClick={onClick}>点击{numComputed}</button>
         </div>
     </>
 }
+
+function Button(props, {slots}) {
+    return (<>
+        <button>{
+            slots.default && slots.default()
+        }</button>
+    </>)
+}
+
+function useSlot<T, K extends keyof T & K extends keyof C ? K : never, C>(slots: T & object, name: K, ctx?: C) {
+    return isFunction(slots[name]) ? slots[name](ctx) : null
+}
+
+console.log(useSlot({
+    a() {
+        return <div>
+            div
+        </div>
+    },
+}, "default", {
+    default: 123
+}))
+
 
 function AA(props, {slots}) {
     console.log('-----')
