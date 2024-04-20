@@ -3,6 +3,7 @@ import HelloWorld from '@/components/HelloWorld.vue'
 import {createVNode, h, onMounted, ref, withModifiers} from "vue";
 import {useCallback, useEffect, useId, useMemo, useReducer, useRef, useState, useUpdate} from "@/hooks";
 import {isFunction, transformArray} from "@/hooks/utils.ts";
+import {JSX} from "vue/jsx-runtime";
 
 const msg = ref('Vite + Vue')
 const count = ref(1)
@@ -52,19 +53,19 @@ function Button(props, {slots}) {
     </>)
 }
 
-function useSlot<T, K extends keyof T & K extends keyof C ? K : never, C>(slots: T & object, name: K, ctx?: C) {
+type slotResultDto = (ctx: object) => JSX.Element | any
+
+type IsFunction<T> = T extends slotResultDto ? true : false;
+
+function useSlot<T extends {
+    [name: string]: (ctx: object) => JSX.Element | any
+}, K extends keyof T & (IsFunction<T[K]> extends true ? K : never), C>(slots: T, name: K, ctx?: C) {
     return isFunction(slots[name]) ? slots[name](ctx) : null
 }
 
 console.log(useSlot({
-    a() {
-        return <div>
-            div
-        </div>
-    },
-}, "default", {
-    default: 123
-}))
+    default: () => 1,
+}, "default"))
 
 
 function AA(props, {slots}) {
