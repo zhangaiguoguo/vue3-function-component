@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import {useModelProps} from "../hooks/index.ts"
+
+import {useModelProps} from "@/hooks/index"
 import {ref} from 'vue'
 
 defineProps<{ msg: string | number }>()

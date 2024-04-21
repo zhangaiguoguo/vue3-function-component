@@ -8,7 +8,8 @@ import {
     ref, toValue,
     warn
 } from "vue";
-import {is, transformFunction} from "@/hooks/utils";
+import {is, isFunction, transformArray, transformFunction} from "@/hooks/utils";
+import {JSX} from "vue/jsx-runtime";
 
 const modelPropsMsp = new WeakMap();
 
@@ -204,23 +205,20 @@ function _createState<T>(target: T, options: StateItemStateOption) {
 }
 
 function examineStateTasks() {
-    if (currentState) {
-        const _currentState = currentState
-        _currentState.gate = true
-        return () => {
-            _currentState.gate = false
-        }
-    } else {
-        throw new Error("error")
+    const _currentState = currentState as any
+    _currentState.gate = true
+    return () => {
+        _currentState.gate = false
     }
 }
 
 
 function _judgeCurrentState() {
     if (!currentState || !currentState.gate) {
-        console.error("Invalid hook call. Hooks can only be called inside of the body of a function component.")
+        warn("Invalid hook call. Hooks can only be called inside of the body of a function component.")
         return true
     }
+    return false
 }
 
 interface componentProps {
@@ -230,10 +228,25 @@ interface componentProps {
 interface componentProps2 extends componentProps {
 }
 
+type ComponentContext = {
+    slots: object,
+    emit: (k: string, ...args: any[]) => void,
+    attrs: object,
+    props: object
+}
+
+let currentRenderComponentContext: null | ComponentContext = null
+
 function scopeTaskStateScheduler(renderHandler: Function) {
     let _: taskItemFn | null = null
     let oldProps: componentProps2 | null = null;
     return (props: componentProps2, context: SetupContext<any>) => {
+        const parentCurrentState = currentState
+        const parentCurrentRenderComponentContext: any = currentRenderComponentContext
+        currentRenderComponentContext = {
+            ...context,
+            props: props
+        }
         let result = null
         if (oldProps !== props) {
             currentState = (_ = createSelfState())()
@@ -241,10 +254,9 @@ function scopeTaskStateScheduler(renderHandler: Function) {
             currentState = (_ as taskItemFn)()
         }
         oldProps = props
-        currentState.scheduler = () => {
-            (props.updateScheduler && props.updateScheduler()) || globalCurrentScheduler && globalCurrentScheduler()
+        if (globalCurrentScheduler || props.updateScheduler) {
+            currentState.scheduler = (currentScheduler = props.updateScheduler || globalCurrentScheduler || null) as any
         }
-        currentScheduler = props.updateScheduler || null
         const resultExamineStateTasks = examineStateTasks()
         try {
             result = renderHandler(props, context)
@@ -252,7 +264,8 @@ function scopeTaskStateScheduler(renderHandler: Function) {
         } catch (err: any) {
             warn(err.message)
         } finally {
-            currentState = null
+            currentState = parentCurrentState
+            currentRenderComponentContext = parentCurrentRenderComponentContext
         }
         return result
     }
@@ -528,7 +541,66 @@ function useRef(target: any = null) {
     return currentRef
 }
 
+type slotResultDto = <T>(ctx: T) => JSX.Element
+
+type IsFunction<T> = T extends slotResultDto ? true : false;
+
+type SlotsDto = {
+    [name: string]: slotResultDto
+}
+
+function useDefineSlot<T extends SlotsDto, K extends keyof T & { [P in keyof T]: IsFunction<T[P]> extends true ? P : never }[keyof T], C>(slots: T, name: K, ctx?: C) {
+    return isFunction(slots[name]) ? slots[name](ctx) : slots[name]
+}
+
+type MapSlotsResult<K> = { [name in keyof K]: JSX.Element | any }
+
+function useDefineSlots<T extends SlotsDto, K extends string | Array<string>>(slots: T, names: K, ctx?: object) {
+    const l = arguments.length
+    if (l < 3) {
+        ctx = {}
+    }
+    const _names = transformArray(names)
+    const _slots: any | MapSlotsResult<K> = {};
+    const isCtxObject = typeof ctx === "object" && ctx !== null
+    for (let name of _names) {
+        _slots[name] = useDefineSlot(slots, name, isCtxObject ? (ctx as any)[name] : ctx)
+    }
+    return _slots
+}
+
+type KeysOfComponentContext = keyof ComponentContext;
+
+function useComponentContextValue<T extends KeysOfComponentContext>(name?: T): ComponentContext | ComponentContext[T] | null {
+    if (_judgeCurrentState() || !currentRenderComponentContext) {
+        return null
+    }
+    return (arguments.length && name ? currentRenderComponentContext[name] : currentRenderComponentContext) || null
+}
+
+function useSlots2() {
+    return useComponentContextValue('slots')
+}
+
+function useContext2() {
+    return useComponentContextValue()
+}
+
+function useAttrs2() {
+    return useComponentContextValue("attrs")
+}
+
+function useEmit() {
+    return useComponentContextValue("emit")
+}
+
+function useProps() {
+    return useComponentContextValue("props")
+}
+
 export {
+    useDefineSlots as useSlotsMap,
+    useDefineSlot,
     useState,
     useEffect,
     render as defineCacheRender,
@@ -542,5 +614,6 @@ export {
     useRef,
     useEffectPre,
     useEffectSync,
-    useUpdate
+    useUpdate,
+    useSlots2, useContext2, useAttrs2, useEmit, useProps
 }
