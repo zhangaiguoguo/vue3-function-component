@@ -1,4 +1,8 @@
-import type {SetupContext} from "vue"
+import type {
+    SetupContext,
+    VNode,
+    VNodeNormalizedChildren, VNodeTypes,
+} from "vue"
 import {
     ComponentInternalInstance,
     customRef,
@@ -8,8 +12,8 @@ import {
     ref, toValue,
     warn
 } from "vue";
-import {is, isFunction, transformArray, transformFunction} from "@/hooks/utils";
-import {JSX} from "vue/jsx-runtime";
+import { is, isArray, isFunction, isQuoteType, transformArray, transformFunction } from "@/hooks/utils";
+import { JSX } from "vue/jsx-runtime";
 
 const modelPropsMsp = new WeakMap();
 
@@ -77,7 +81,6 @@ interface StateOption {
     effects: effectOption[];
     effectIndex: number
     stateIndex: number
-    _: number
     _index: number
     flag: boolean
     gate?: boolean
@@ -95,14 +98,8 @@ let currentState: StateOption | null = null
 
 let currentScheduler: Function | null = null
 
-function collectTime() {
-    const _ = Date.now()
-    return () => Date.now() - _
-}
-
 function createState() {
     const _index = index
-    const __ = collectTime()
     let _gate = false
     const currentState: StateOption = {
         refId: 0,
@@ -110,7 +107,6 @@ function createState() {
         effects: [],
         effectIndex: 0,
         stateIndex: 0,
-        _: __(),
         _index: _index,
         flag: true,
     }
@@ -237,41 +233,67 @@ type ComponentContext = {
 
 let currentRenderComponentContext: null | ComponentContext = null
 
+const DEFINEMEMORENDER = "DefineMemoRender"
+
 function scopeTaskStateScheduler(renderHandler: Function) {
     let _: taskItemFn | null = null
     let oldProps: componentProps2 | null = null;
-    return (props: componentProps2, context: SetupContext<any>) => {
-        const parentCurrentState = currentState
-        const parentCurrentRenderComponentContext: any = currentRenderComponentContext
-        currentRenderComponentContext = {
-            ...context,
-            props: props
+
+    const componentFuntionName = renderHandler ? renderHandler.name : 'defineMemoRender'
+    const componentVnode = {
+        [componentFuntionName]: function (props: componentProps2, context: SetupContext<any>) {
+            const parentCurrentState = currentState
+            const parentCurrentRenderComponentContext: any = currentRenderComponentContext
+            currentRenderComponentContext = {
+                ...context,
+                props: props
+            }
+            let result = null
+            if (oldProps !== props) {
+                currentState = (_ = createSelfState())()
+            } else {
+                currentState = (_ as taskItemFn)()
+            }
+
+            currentState.updateScheduler = getCurrentInstance().update
+            
+            oldProps = props
+            const resultExamineStateTasks = examineStateTasks()
+            try {
+                result = renderHandler(props, context)
+                watchEffect(()=>{
+                    console.log(1);
+                    
+                })
+                resultExamineStateTasks()
+            } catch (err: any) {
+                warn(err.message)
+            } finally {
+                currentState = parentCurrentState
+                currentRenderComponentContext = parentCurrentRenderComponentContext
+            }
+            return result
         }
-        let result = null
-        if (oldProps !== props) {
-            currentState = (_ = createSelfState())()
-        } else {
-            currentState = (_ as taskItemFn)()
-        }
-        oldProps = props
-        if (globalCurrentScheduler || props.updateScheduler) {
-            currentState.scheduler = (currentScheduler = props.updateScheduler || globalCurrentScheduler || null) as any
-        }
-        const resultExamineStateTasks = examineStateTasks()
-        try {
-            result = renderHandler(props, context)
-            resultExamineStateTasks()
-        } catch (err: any) {
-            warn(err.message)
-        } finally {
-            currentState = parentCurrentState
-            currentRenderComponentContext = parentCurrentRenderComponentContext
-        }
-        return result
     }
+
+    {
+        const _renderHandler = renderHandler as any
+        const DefineMemoRender = componentVnode[componentFuntionName] as any
+
+        DefineMemoRender.props = _renderHandler.props
+
+        DefineMemoRender.emits = _renderHandler.emits
+
+        DefineMemoRender.type = DEFINEMEMORENDER
+    }
+
+    return componentVnode[componentFuntionName]
 }
 
-function render(renderHandler: Function) {
+function defineMemoRender(renderHandler: Function) {
+    if (!isFunction(renderHandler)) {
+        return renderHandler
+    }
     return scopeTaskStateScheduler(renderHandler)
 }
 
@@ -420,7 +442,7 @@ function useState<T>(target: T) {
 
 function useUpdate() {
     if (_judgeCurrentState()) return
-    const updateScheduler = currentState && currentState.scheduler
+    const updateScheduler = currentState && currentState.updateScheduler
     return () => {
         updateScheduler && updateScheduler()
     }
@@ -483,8 +505,8 @@ const useReducerOptions = {
 }
 
 // @ts-ignore
-function useReducer<TT, TT2>(reducer: <T>(arg: T, arg2: object) => T, initialArg: TT2, init?: (v: TT2) => any): [TT2, (arg: object) => void] | void {
-    if (_judgeCurrentState()) return
+function useReducer<TT, TT2>(reducer: <T>(arg: T, arg2: object) => T, initialArg: TT2, init?: (v: TT2) => any): [TT2, (arg: object) => void] | null {
+    if (_judgeCurrentState()) return null
     const [isInit, setInit] = createCurrentState(false, useReducerOptions) as createCurrentStateResult
     if (typeof init === "function" && !isInit) {
         initialArg = init(initialArg)
@@ -541,11 +563,11 @@ function useRef(target: any = null) {
     return currentRef
 }
 
-type slotResultDto = <T>(ctx: T) => JSX.Element
+export type slotResultDto = <T>(ctx: T) => JSX.Element | VNodeNormalizedChildren
 
-type IsFunction<T> = T extends slotResultDto ? true : false;
+export type IsFunction<T> = T extends slotResultDto ? true : false;
 
-type SlotsDto = {
+export type SlotsDto = {
     [name: string]: slotResultDto
 }
 
@@ -598,12 +620,40 @@ function useProps() {
     return useComponentContextValue("props")
 }
 
+function transformVNodeFunctionComponentTypeWithMemo<T extends VNodeNormalizedChildren>(vnode: T): T {
+    if (!vnode) {
+        return vnode
+    }
+    if (isArray(vnode) ? !vnode.length : true) {
+        return vnode
+    }
+    return (vnode as any[]).map((node: VNode) => {
+        const type: any = node.type
+        if (isFunction(type) && (type as { type: string }).type !== DEFINEMEMORENDER) {
+            node.type = defineMemoRender(type as () => any) as any
+        } else if (isFunction(type.render) && (type.render as { type: string }).type !== DEFINEMEMORENDER) {
+            node.type = {
+                ...type,
+                render: defineMemoRender(function (this: any, ...args: any) {
+                    return type.render.call(this, ...args)
+                })
+            }
+            console.log(node.type);
+
+        }
+
+        return node
+    }) as T
+}
+
+
 export {
     useDefineSlots as useSlotsMap,
     useDefineSlot,
     useState,
     useEffect,
-    render as defineCacheRender,
+    defineMemoRender as defineCacheRender,
+    defineMemoRender,
     useCallback,
     useMemo,
     useId,
@@ -615,5 +665,5 @@ export {
     useEffectPre,
     useEffectSync,
     useUpdate,
-    useSlots2, useContext2, useAttrs2, useEmit, useProps
+    useSlots2, useContext2, useAttrs2, useEmit, useProps, transformVNodeFunctionComponentTypeWithMemo
 }

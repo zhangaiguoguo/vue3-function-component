@@ -23,7 +23,13 @@
     "noFallthroughCasesInSwitch": true,
     "paths": {
       "@/*": [
-        "src/*",
+        "src/*"
+      ],
+      "@/**": [
+        "src/**"
+      ],
+      "@/**/*": [
+        "src/**/*"
       ]
     },
     "baseUrl": "."
@@ -39,5 +45,7 @@
       "path": "./tsconfig.node.json"
     }
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules"
+  ]
 }

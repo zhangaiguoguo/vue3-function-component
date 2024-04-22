@@ -26,3 +26,14 @@ export function isObject(target: any | never) {
 }
 
 export const is = Object.is
+
+export function isQuoteType(target: any) {
+    return typeof target === "object"
+}
+
+export const has = (target: any, key: any) => {
+    if (!isQuoteType(target)) {
+        return false
+    }
+    return key in target || Reflect.has(target, key)
+}
