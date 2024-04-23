@@ -16,6 +16,8 @@ defineExpose({
     msg
 })
 
+
+
 const A = {
     setup(props, context) {
         const num = ref(1)
@@ -45,7 +47,7 @@ const A = {
 }
 
 function Button(): any {
-    const [count, setCount] = useState(1)
+    const [count, setCount] = useState(1);
     const Content = useMemo(() => {
         return defineMemoRender(() => {
             const [count, setCount] = useState(1)
@@ -53,7 +55,7 @@ function Button(): any {
                 <button onClick={() => setCount(count + 1)}>点击{count}</button>
             </>
         })
-    },[])
+    }, [])
     return <>
         <button onClick={() => setCount(count + 1)}>点击{count}</button>
         <br />

@@ -1,4 +1,5 @@
 import type {
+    Ref,
     SetupContext,
     VNode,
     VNodeNormalizedChildren, VNodeTypes,
@@ -84,8 +85,9 @@ interface StateOption {
     _index: number
     flag: boolean
     gate?: boolean
-    updateScheduler?: Function
-    scheduler?: Function
+    updateScheduler?: () => void,
+    scheduler?: Function,
+    updateFlag: Ref<boolean>
 }
 
 const tasks: taskItemFn[] = []
@@ -101,6 +103,7 @@ let currentScheduler: Function | null = null
 function createState() {
     const _index = index
     let _gate = false
+
     const currentState: StateOption = {
         refId: 0,
         state: [],
@@ -109,6 +112,10 @@ function createState() {
         stateIndex: 0,
         _index: _index,
         flag: true,
+        updateScheduler: () => {
+            currentState.updateFlag.value = !currentState.updateFlag.value
+        },
+        updateFlag: ref(false),
     }
     try {
         return def(currentState, 'gate', {
@@ -123,6 +130,7 @@ function createState() {
                         this.refId = 0
                         this.stateIndex = 0
                         this.effectIndex = 0
+                        currentState.updateFlag.value
                     } else {
                         if (this.stateIndex !== this.state.length || this.effectIndex !== this.effects.length) {
                             try {
@@ -238,7 +246,6 @@ const DEFINEMEMORENDER = "DefineMemoRender"
 function scopeTaskStateScheduler(renderHandler: Function) {
     let _: taskItemFn | null = null
     let oldProps: componentProps2 | null = null;
-
     const componentFuntionName = renderHandler ? renderHandler.name : 'defineMemoRender'
     const componentVnode = {
         [componentFuntionName]: function (props: componentProps2, context: SetupContext<any>) {
@@ -255,16 +262,10 @@ function scopeTaskStateScheduler(renderHandler: Function) {
                 currentState = (_ as taskItemFn)()
             }
 
-            currentState.updateScheduler = getCurrentInstance().update
-            
             oldProps = props
             const resultExamineStateTasks = examineStateTasks()
             try {
                 result = renderHandler(props, context)
-                watchEffect(()=>{
-                    console.log(1);
-                    
-                })
                 resultExamineStateTasks()
             } catch (err: any) {
                 warn(err.message)
@@ -290,10 +291,11 @@ function scopeTaskStateScheduler(renderHandler: Function) {
     return componentVnode[componentFuntionName]
 }
 
-function defineMemoRender(renderHandler: Function) {
+function defineMemoRender<T extends { type?: 'DefineMemoRender' } & Function>(renderHandler: T) {
     if (!isFunction(renderHandler)) {
         return renderHandler
     }
+    if (renderHandler.type === DEFINEMEMORENDER) return renderHandler
     return scopeTaskStateScheduler(renderHandler)
 }
 
