@@ -1,10 +1,10 @@
 <script setup lang="tsx">
 
 import HelloWorld from '@/components/HelloWorld.vue';
-import { createVNode, getCurrentInstance, h, onMounted, ref } from "vue";
+import { Fragment, createVNode, getCurrentInstance, h, onMounted, ref } from "vue";
 import DefineMemoRender from "@/hooks/DefineMemoRender.vue"
-import { defineMemoRender, useMemo, useState } from './hooks';
-import { useUpdate } from './hooks';
+import { DefineMemoComponent, createCurrentState, defineMemoRender, useDefineSlot, useMemo, useProps, useSlots2, useState } from './hooks';
+import { isFunction } from './hooks/utils';
 
 const msg = ref('Vite + Vue')
 const count = ref(1)
@@ -19,7 +19,7 @@ defineExpose({
 
 
 const A = {
-    setup(props, context) {
+    setup(_props, _context) {
         const num = ref(1)
         const done = ref(true)
         return () => {
@@ -46,21 +46,40 @@ const A = {
     }
 }
 
+function Content() {
+    const [count, setCount] = useState(1)
+    const props = useProps() as any
+    return <>
+        <button onClick={() => setCount(count + 1)}>点击 {count}-props - {props.count}</button>
+        <br />
+        <br />
+        <DefineMemoComponent>
+            {
+                {
+                    default: () => {
+                        return (<Content2 count={count} />)
+                    }
+                }
+            }
+        </DefineMemoComponent>
+    </>
+}
+
+function Content2() {
+    const [count, setCount] = useState(1)
+    const props = useProps() as any
+    return <>
+        <button onClick={() => setCount(count + 1)}>点击 {count}-props2 - {props.count}</button>
+    </>
+}
+
+
 function Button(): any {
     const [count, setCount] = useState(1);
-    const Content = useMemo(() => {
-        return defineMemoRender(() => {
-            const [count, setCount] = useState(1)
-            return <>
-                <button onClick={() => setCount(count + 1)}>点击{count}</button>
-            </>
-        })
-    }, [])
     return <>
         <button onClick={() => setCount(count + 1)}>点击{count}</button>
         <br />
         <br />
-        <Content />
     </>
 }
 
@@ -75,9 +94,18 @@ function Button(): any {
     <!--    <A/>-->
     <br />
     <br />
-    <DefineMemoRender>
-        <Button></Button>
-    </DefineMemoRender>
+    <DefineMemoRender :render="Button" />
+    <div>
+        <DefineMemoComponent>
+            <template v-slot:default>
+                <Content :count="count" v-for="i in 5"/>
+                <hr>
+                <br/>
+                <br/>
+                <Button :count="count" />
+            </template>
+        </DefineMemoComponent>
+    </div>
 </template>
 
 <style scoped>

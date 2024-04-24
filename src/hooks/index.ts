@@ -6,6 +6,7 @@ import type {
 } from "vue"
 import {
     ComponentInternalInstance,
+    Fragment,
     customRef,
     getCurrentInstance,
     isRef,
@@ -256,6 +257,7 @@ function scopeTaskStateScheduler(renderHandler: Function) {
                 props: props
             }
             let result = null
+
             if (oldProps !== props) {
                 currentState = (_ = createSelfState())()
             } else {
@@ -286,6 +288,8 @@ function scopeTaskStateScheduler(renderHandler: Function) {
         DefineMemoRender.emits = _renderHandler.emits
 
         DefineMemoRender.type = DEFINEMEMORENDER
+
+        DefineMemoRender.sursor = renderHandler
     }
 
     return componentVnode[componentFuntionName]
@@ -379,10 +383,11 @@ function createCurrentEffect(callback: effectArgTs, schedule: createCurrentEffec
                 if (!effects[currentSub].init) {
                     return true
                 }
-                const oldDeps = transformFunction(effects[currentSub].deps)();
-                const newDeps = transformFunction(deps)();
-                return oldDeps == null || oldDeps.length && (newDeps.length !== (oldDeps && oldDeps.length) || (oldDeps && oldDeps.some((dep: any, index: number) => newDeps[index] !== dep)))
+                const oldDeps = effects[currentSub].deps as any
+                const newDeps = deps as any
+                return typeof newDeps === "function" ? newDeps() : oldDeps == null || oldDeps.length && (newDeps.length !== (oldDeps && oldDeps.length) || (oldDeps && oldDeps.some((dep: any, index: number) => newDeps[index] !== dep)))
             })()) {
+
                 effects[currentSub].scheduler({
                     callback,
                     deps
@@ -649,6 +654,91 @@ function transformVNodeFunctionComponentTypeWithMemo<T extends VNodeNormalizedCh
 }
 
 
+function isSameMemoComponentType<T extends Function & { type: { sursor: any } }, T2 extends T>(n: T, n2: T2) {
+    if (isFunction(n.type) && isFunction(n2.type)) {
+
+        return (n.type.sursor === n2.type.sursor || n.type.sursor === n2.type)
+    } else {
+        return false
+    }
+}
+
+function isFragmentNode(nodes: VNode[] | null) {
+
+    if (nodes) {
+        for (let i = 0; i < nodes.length; i++) {
+            transformMemoComponent(nodes[i])
+        }
+    }
+
+}
+
+function transformMemoComponent(node: VNode) {
+    if (isFunction(node.type)) {
+        node.type = defineMemoRender(node.type as any)
+    } else if (isFragment(node)) {
+        isFragmentNode(node.children as any)
+    }
+}
+
+function isFragment(node: VNode) {
+    return node.type === Fragment
+}
+
+function diffTransformMemoComponent(n: any, n2: any) {
+    if (!n2) {
+        return isFragmentNode(n)
+    }
+    for (let i = 0; i < n.length; i++) {
+
+        let n1IsFragment = false
+
+        if (!n[i] || !n2[i] || (n2[i].key !== n[i].key)) {
+            transformMemoComponent(n[i])
+            continue;
+        }
+        if (isSameMemoComponentType(n2[i], n[i])) {
+
+            n[i].type = n2[i].type
+        } else if (n1IsFragment = isFragment(n[i]) && isFragment(n2[i])) {
+            
+            diffTransformMemoComponent(n[i].children, n2[i].children)
+        } else if (n1IsFragment) {
+            transformMemoComponent(n[i])
+        }
+    }
+}
+
+const DefineMemoComponent = {
+    setup(_props: any, { slots }: any) {
+        return defineMemoRender(function DefineMemoComponent2() {
+
+            let defaultSlot = (useDefineSlot(slots as { default: () => any }, 'default') as any)
+
+            let [Component, setCurrentdefaultSlot] = createCurrentState(null, {
+                isToRef: false
+            }) as any;
+
+            if (Component !== defaultSlot) {
+                if (!Component && defaultSlot) {
+                    for (let i = 0; i < defaultSlot.length; i++) {
+                        transformMemoComponent(defaultSlot[i])
+                    }
+                } else {
+                    diffTransformMemoComponent(defaultSlot, Component)
+                }
+                Component = defaultSlot
+
+                setCurrentdefaultSlot(defaultSlot)
+
+            }
+
+            return (Component)
+        })
+    }
+}
+
+
 export {
     useDefineSlots as useSlotsMap,
     useDefineSlot,
@@ -667,5 +757,6 @@ export {
     useEffectPre,
     useEffectSync,
     useUpdate,
-    useSlots2, useContext2, useAttrs2, useEmit, useProps, transformVNodeFunctionComponentTypeWithMemo
+    useSlots2, useContext2, useAttrs2, useEmit, useProps, transformVNodeFunctionComponentTypeWithMemo,
+    createCurrentState, DefineMemoComponent
 }
