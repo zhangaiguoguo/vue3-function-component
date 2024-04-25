@@ -1,10 +1,8 @@
 <script setup lang="tsx">
 
 import HelloWorld from '@/components/HelloWorld.vue';
-import { Fragment, createVNode, getCurrentInstance, h, onMounted, ref } from "vue";
-import DefineMemoRender from "@/hooks/DefineMemoRender.vue"
-import { DefineMemoComponent, createCurrentState, defineMemoRender, useDefineSlot, useMemo, useProps, useSlots2, useState } from './hooks';
-import { isFunction } from './hooks/utils';
+import { createVNode, h, onMounted, ref } from "vue";
+import { memo, useProps, useState } from './hooks';
 
 const msg = ref('Vite + Vue')
 const count = ref(1)
@@ -16,6 +14,29 @@ defineExpose({
     msg
 })
 
+const Content = memo(function Content() {
+
+    const props = useProps()
+
+    const [count, setcount] = useState(1);
+
+    return (<>
+
+        {
+            new Array(1).fill(0).map((s, i) => {
+                return <>
+                    <div>
+                        <h1>
+                            {i} - {count}
+                        </h1>
+                        <button onClick={() => setcount(count + 1)}>点击</button>
+                    </div>
+                </>
+            })
+        }
+
+    </>)
+})
 
 
 const A = {
@@ -24,7 +45,7 @@ const A = {
         const done = ref(true)
         return () => {
             const a = { onClick: () => num.value++, num: num.value }
-            return num.value % 2 ? [
+            return num.value % 2 || true ? [
                 h('div', { num: num.value }, '你好 - a'),
                 h('div', '你好'),
                 h('input', {
@@ -36,6 +57,7 @@ const A = {
                 h('br'),
                 createVNode('button', a, `点击${num.value}`, 0, []),
                 h(HelloWorld, { msg: count.value }),
+                <Content count={count.value} />
             ] : [
                 h(HelloWorld, { msg: count.value }),
                 h('div', { num: num.value }, '你好 - a'),
@@ -46,66 +68,13 @@ const A = {
     }
 }
 
-function Content() {
-    const [count, setCount] = useState(1)
-    const props = useProps() as any
-    return <>
-        <button onClick={() => setCount(count + 1)}>点击 {count}-props - {props.count}</button>
-        <br />
-        <br />
-        <DefineMemoComponent>
-            {
-                {
-                    default: () => {
-                        return (<Content2 count={count} />)
-                    }
-                }
-            }
-        </DefineMemoComponent>
-    </>
-}
-
-function Content2() {
-    const [count, setCount] = useState(1)
-    const props = useProps() as any
-    return <>
-        <button onClick={() => setCount(count + 1)}>点击 {count}-props2 - {props.count}</button>
-    </>
-}
-
-
-function Button(): any {
-    const [count, setCount] = useState(1);
-    return <>
-        <button onClick={() => setCount(count + 1)}>点击{count}</button>
-        <br />
-        <br />
-    </>
-}
-
 </script>
 
 <template>
     <button @click="count++">点击{{ count }}</button>
-    <!--    <HelloWorld :msg="msg" v-if="count % 2"/>-->
-    <!--    <h1 :num="count">-&#45;&#45;&#45;&#45;&#45;&#45;&#45;&#45;</h1>-->
-    <!--    <b>1231</b>-->
-    <!--    <HelloWorld :msg="msg"/>-->
-    <!--    <A/>-->
-    <br />
-    <br />
-    <DefineMemoRender :render="Button" />
-    <div>
-        <DefineMemoComponent>
-            <template v-slot:default>
-                <Content :count="count" v-for="i in 5"/>
-                <hr>
-                <br/>
-                <br/>
-                <Button :count="count" />
-            </template>
-        </DefineMemoComponent>
-    </div>
+    <hr>
+    <A />
+    <hr>
 </template>
 
 <style scoped>

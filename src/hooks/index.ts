@@ -2,7 +2,7 @@ import type {
     Ref,
     SetupContext,
     VNode,
-    VNodeNormalizedChildren, VNodeTypes,
+    VNodeNormalizedChildren,
 } from "vue"
 import {
     ComponentInternalInstance,
@@ -14,7 +14,7 @@ import {
     ref, toValue,
     warn
 } from "vue";
-import { is, isArray, isFunction, isQuoteType, transformArray, transformFunction } from "@/hooks/utils";
+import { is, isArray, isFunction, transformArray } from "@/hooks/utils";
 import { JSX } from "vue/jsx-runtime";
 
 const modelPropsMsp = new WeakMap();
@@ -83,7 +83,6 @@ interface StateOption {
     effects: effectOption[];
     effectIndex: number
     stateIndex: number
-    _index: number
     flag: boolean
     gate?: boolean
     updateScheduler?: () => void,
@@ -93,16 +92,11 @@ interface StateOption {
 
 const tasks: taskItemFn[] = []
 
-let index = 0
-
-let globalCurrentScheduler: Function | null = null
-
 let currentState: StateOption | null = null
 
 let currentScheduler: Function | null = null
 
 function createState() {
-    const _index = index
     let _gate = false
 
     const currentState: StateOption = {
@@ -111,7 +105,6 @@ function createState() {
         effects: [],
         effectIndex: 0,
         stateIndex: 0,
-        _index: _index,
         flag: true,
         updateScheduler: () => {
             currentState.updateFlag.value = !currentState.updateFlag.value
@@ -147,7 +140,6 @@ function createState() {
             }
         })[0]
     } finally {
-        index++
     }
 }
 
@@ -525,38 +517,40 @@ function useReducer<TT, TT2>(reducer: <T>(arg: T, arg2: object) => T, initialArg
     }, [state])]
 }
 
-function memo(component: Function, callback: effectArgDepTs) {
-    let result: any = null
-    let oldProps: any = null
-    let init = false
-    const _callback = typeof callback === "function" ? callback : () => !void 0
+type MemoNextFun = (newProps: object, oldPorps: object | null) => boolean
 
-    function _(props: any) {
-        let next = _callback()
-        if (next) {
-            try {
-                for (let w in (props || {})) {
-                    if (oldProps !== null) {
-                        if (oldProps[w] !== props[w]) {
-                            next = false
-                            break
-                        }
-                    }
+function memoDefaultDiffProps(newProps: object, oldProps: object | null) {
+    try {
+        if (oldProps === null) {
+            return true
+        } else {
+            for (let w in newProps) {
+                if (!is((oldProps as any)[w], (newProps as any)[w])) {
+                    return true
                 }
-            } catch {
-                next = false
             }
         }
-        oldProps = props || {}
-        return !init ? !(init = true) : next
+    } catch {
+    }
+    return false
+}
+
+function memo(component: Function, callback: MemoNextFun) {
+    let result: any = null
+    let oldProps: any = null
+    const nextCallback = typeof callback === "function" ? callback : memoDefaultDiffProps
+
+    const Component = {
+        [component.name]: function (props: object, context: SetupContext<object>) {
+            if (nextCallback(props, oldProps)) {
+                oldProps = { ...props }
+                result = component(props, context)
+            }
+            return result
+        }
     }
 
-    return function (props: object, context: SetupContext<object>) {
-        if (!_(props)) {
-            result = component(props, context)
-        }
-        return result
-    }
+    return defineMemoRender(Component[component.name])
 }
 
 function useRef(target: any = null) {
@@ -701,7 +695,7 @@ function diffTransformMemoComponent(n: any, n2: any) {
 
             n[i].type = n2[i].type
         } else if (n1IsFragment = isFragment(n[i]) && isFragment(n2[i])) {
-            
+
             diffTransformMemoComponent(n[i].children, n2[i].children)
         } else if (n1IsFragment) {
             transformMemoComponent(n[i])
