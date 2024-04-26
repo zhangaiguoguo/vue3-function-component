@@ -181,21 +181,26 @@ function _createState<T>(target: T, options: StateItemStateOption) {
         initValue: target,
         history: [target],
         options: options || null,
-        add<T>(v: T) {
+        add(v: any) {
             const lastCurrentState = last(this.history)
+            const setState = typeof v === "function" ? v : () => v;
             if (isRef(lastCurrentState)) {
-                lastCurrentState.value = v
+                lastCurrentState.value = setState(state.value)
+
             } else {
                 if (this.history.length > 2) {
                     this.history.splice(this.history.length - 2, 1)
                 }
-                this.history.push(v as any)
+                this.history.push(setState(state.value) as any)
             }
         },
     }
     def(state, 'value', {
-        get() {
-            return toRefValue(last(state.history))
+        get(this: StateItemState) {
+            if (this.options && this.options.isToRef) {
+                return toRefValue(last(state.history))
+            }
+            return last(this.history)
         }
     })
     return state
@@ -599,14 +604,12 @@ function memo(component: Function, callback?: MemoNextFun) {
 }
 
 function useRef(target: any = null) {
-    const [get, set] = createCurrentState(arguments.length ? target : null, {
+    const [get] = createCurrentState({
+        value: target, __v_isRef: true
+    }, {
         isToRef: false
     }) as any;
-    const currentRef = isRef(get) ? get : ref(get)
-    if (currentRef !== get) {
-        set(currentRef)
-    }
-    return currentRef
+    return get
 }
 
 export type slotResultDto = <T>(ctx: T) => JSX.Element | VNodeNormalizedChildren
