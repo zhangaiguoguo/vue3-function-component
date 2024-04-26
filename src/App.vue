@@ -2,7 +2,7 @@
 
 import HelloWorld from '@/components/HelloWorld.vue';
 import { createVNode, h, onMounted, ref } from "vue";
-import { memo, useProps, useState } from './hooks';
+import { memo, useImperativeHandle, useProps, useRef, useState } from './hooks';
 
 const msg = ref('Vite + Vue')
 const count = ref(1)
@@ -14,29 +14,44 @@ defineExpose({
     msg
 })
 
-const Content = memo(function Content() {
+const Input = function () {
+    const { ref2 } = useProps()
+    const inputRef = useRef(null)
+    useImperativeHandle(ref2, () => {
+        console.log(1);
 
-    const props = useProps()
-
-    const [count, setcount] = useState(1);
-
-    return (<>
-
-        {
-            new Array(1).fill(0).map((s, i) => {
-                return <>
-                    <div>
-                        <h1>
-                            {i} - {count}
-                        </h1>
-                        <button onClick={() => setcount(count + 1)}>点击</button>
-                    </div>
-                </>
-            })
+        return {
+            focus() {
+                inputRef.value.focus()
+            }
         }
+    }, [inputRef.value])
 
-    </>)
-})
+    console.log(inputRef.value, ref2);
+
+    return (
+        <input ref={inputRef} />
+    )
+}
+
+const Content = function () {
+    const [count, setCount] = useState(1)
+    const inputRef = useRef(null)
+
+    return <>
+        <button onClick={() => setCount(count + 1)}>
+            点击{count}
+        </button>
+        <div>
+            你好
+        </div>
+        <br />
+        <Input ref2={inputRef} />
+        <button onClick={() => inputRef.value.focus()}>
+            获取焦点
+        </button>
+    </>
+}
 
 
 const A = {
@@ -57,7 +72,7 @@ const A = {
                 h('br'),
                 createVNode('button', a, `点击${num.value}`, 0, []),
                 h(HelloWorld, { msg: count.value }),
-                <Content count={count.value} />
+                <Content count={count.value}/>
             ] : [
                 h(HelloWorld, { msg: count.value }),
                 h('div', { num: num.value }, '你好 - a'),

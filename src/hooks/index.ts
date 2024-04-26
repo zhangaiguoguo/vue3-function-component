@@ -203,9 +203,15 @@ function _createState<T>(target: T, options: StateItemStateOption) {
 
 function examineStateTasks() {
     const _currentState = currentState as any
+    const currentRunStateCount = _currentState.stateIndex
     _currentState.gate = true
-    return () => {
-        _currentState.gate = false
+    return {
+        stop() {
+            _currentState.gate = false
+        },
+        init() {
+            _currentState.stateIndex = currentRunStateCount
+        }
     }
 }
 
@@ -236,7 +242,15 @@ let currentRenderComponentContext: null | ComponentContext = null
 
 const DEFINEMEMORENDER = "DefineMemoRender"
 
-function scopeTaskStateScheduler(renderHandler: Function) {
+type ScopeTaskStateSchedulerRenderTs = ((...args: any) => any) & {
+    shargFlag?: any;
+    runCount?: any;
+    type?: 'DefineMemoRender',
+    props?: any,
+    emits?: any
+};
+
+function scopeTaskStateScheduler(renderHandler: ScopeTaskStateSchedulerRenderTs) {
     let _: taskItemFn | null = null
     let oldProps: componentProps2 | null = null;
     const componentFuntionName = renderHandler ? renderHandler.name : 'defineMemoRender'
@@ -251,22 +265,38 @@ function scopeTaskStateScheduler(renderHandler: Function) {
             let result = null
 
             if (oldProps !== props) {
+
                 currentState = (_ = createSelfState())()
             } else {
+
                 currentState = (_ as taskItemFn)()
             }
 
             oldProps = props
+
             const resultExamineStateTasks = examineStateTasks()
+
+            const isRunMemoFlag = isMemo(renderHandler) ? getMemoRunCount(renderHandler) : null
+
             try {
                 result = renderHandler(props, context)
-                resultExamineStateTasks()
+                if (isRunMemoFlag !== null) {
+                    if (isRunMemoFlag === getMemoRunCount(renderHandler)) {
+
+                        resultExamineStateTasks.init()
+                    }
+                }
+                resultExamineStateTasks.stop()
             } catch (err: any) {
+
                 warn(err.message)
             } finally {
+
                 currentState = parentCurrentState
+
                 currentRenderComponentContext = parentCurrentRenderComponentContext
             }
+
             return result
         }
     }
@@ -287,7 +317,7 @@ function scopeTaskStateScheduler(renderHandler: Function) {
     return componentVnode[componentFuntionName]
 }
 
-function defineMemoRender<T extends { type?: 'DefineMemoRender' } & Function>(renderHandler: T) {
+function defineMemoRender<T extends ScopeTaskStateSchedulerRenderTs>(renderHandler: T) {
     if (!isFunction(renderHandler)) {
         return renderHandler
     }
@@ -535,7 +565,17 @@ function memoDefaultDiffProps(newProps: object, oldProps: object | null) {
     return false
 }
 
-function memo(component: Function, callback: MemoNextFun) {
+const memoFragment = Symbol('memoFragment')
+
+function isMemo(target: { shargFlag?: any }) {
+    return target.shargFlag === memoFragment
+}
+
+function getMemoRunCount(target: { runCount?: any }) {
+    return target.runCount
+}
+
+function memo(component: Function, callback?: MemoNextFun) {
     let result: any = null
     let oldProps: any = null
     const nextCallback = typeof callback === "function" ? callback : memoDefaultDiffProps
@@ -544,11 +584,16 @@ function memo(component: Function, callback: MemoNextFun) {
         [component.name]: function (props: object, context: SetupContext<object>) {
             if (nextCallback(props, oldProps)) {
                 oldProps = { ...props }
-                result = component(props, context)
+                result = component(props, context);
+                (Component[component.name] as any).runCount++
             }
             return result
         }
-    }
+    };
+
+    (Component[component.name] as any).runCount = 0;
+
+    (Component[component.name] as any).shargFlag = memoFragment
 
     return defineMemoRender(Component[component.name])
 }
@@ -732,6 +777,11 @@ const DefineMemoComponent = {
     }
 }
 
+function useImperativeHandle(ref: Ref<any>, stateCallback: () => any, deps?: effectArgDepTs) {
+    useEffect(() => {
+        ref.value = stateCallback()
+    }, deps)
+}
 
 export {
     useDefineSlots as useSlotsMap,
@@ -752,5 +802,5 @@ export {
     useEffectSync,
     useUpdate,
     useSlots2, useContext2, useAttrs2, useEmit, useProps, transformVNodeFunctionComponentTypeWithMemo,
-    createCurrentState, DefineMemoComponent
+    createCurrentState, DefineMemoComponent, useImperativeHandle
 }
