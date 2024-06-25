@@ -1131,16 +1131,28 @@ function useReactive<T>(value: T) {
 
 type DefineFunctionSlotTs = (...args: any[]) => VNode | VNode[] | null | void
 
-function defineFunctionSlots(context: VNode | VNode[] | DefineFunctionSlotTs | Record<string, DefineFunctionSlotTs>) {
+function defineFunctionSlots(context: VNode | VNode[] | DefineFunctionSlotTs | Record<string, DefineFunctionSlotTs>, ...args: (DefineFunctionSlotTs | Record<string, DefineFunctionSlotTs>)[]) {
     if (context)
         if (isVNode(context)) {
             return {
                 default: () => context,
             };
         } else if (isFunction(context)) {
-            return {
-                default: context,
-            };
+            if (arguments.length === 1) {
+                return {
+                    default: context,
+                };
+            } else {
+                const slots = {};
+                for (let slotFn of arguments) {
+                    if (isFunction(slotFn)) {
+                        slots[slotFn.name || "default"] = slotFn;
+                    } else {
+                        Object.assign(slots, slotFn);
+                    }
+                }
+                return slots;
+            }
         } else {
             for (let slotName in context) {
                 if (!isFunction(context[slotName])) {
