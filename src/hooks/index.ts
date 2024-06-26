@@ -363,7 +363,8 @@ export function toRefValue(target: any) {
 
 function createCurrentState<T>(initState: T | (() => T), options: StateItemStateOption = {
     isToRef: true,
-}): createCurrentStateResult | void {
+}) {
+    let returnResult;
     if (currentState) {
         const _currentState = currentState;
         try {
@@ -374,7 +375,7 @@ function createCurrentState<T>(initState: T | (() => T), options: StateItemState
             let current = state[currentSub] || state[state.push(_createState(options.isToRef ? ref(initState()) : initState(), options)) - 1];
             const _options = current.options || options;
             current._scheduler = current._scheduler || (_options && _options.scheduler) || currentScheduler;
-            return [current.value, (current.scheduler || (current.scheduler = async <T>(value: T) => {
+            returnResult = [current.value, (current.scheduler || (current.scheduler = async <T>(value: T) => {
                 if (!is(value, current.value)) {
                     let isSetStateFlag: boolean | Function | void = true;
                     if (current._scheduler) {
@@ -392,6 +393,7 @@ function createCurrentState<T>(initState: T | (() => T), options: StateItemState
             _currentState.stateIndex++;
         }
     }
+    return returnResult as unknown as createCurrentStateResult;
 }
 
 interface effectOption {
@@ -463,7 +465,7 @@ function setEffectResultScheduler(effect: effectOption, result: (() => void) | (
 }
 
 function useEffectPre(target: effectArgTs, deps: effectArgDepTs) {
-    if (_judgeCurrentState()) return;
+    _judgeCurrentState();
     createCurrentEffect(target, (validate, options, effects, index) => {
         const currentEffect = effects[index];
         const _callback = options.callback;
@@ -480,7 +482,7 @@ type effectArgTs = () => (() => void) | void;
 type effectArgDepTs = any[] | (() => boolean) | void;
 
 function useEffectSync(target: effectArgTs, deps: effectArgDepTs) {
-    if (_judgeCurrentState()) return;
+    _judgeCurrentState();
     createCurrentEffect(target, (validate, options, effects, index) => {
         if (!validate()) return;
         const currentEffect = effects[index];
@@ -491,14 +493,14 @@ function useEffectSync(target: effectArgTs, deps: effectArgDepTs) {
 }
 
 function useState<T>(target?: T) {
-    if (_judgeCurrentState()) return;
+    _judgeCurrentState();
     return createCurrentState(target, {
         isToRef: true,
     });
 }
 
 function useUpdate() {
-    if (_judgeCurrentState()) return;
+    _judgeCurrentState();
     const updateScheduler = currentState && currentState.updateScheduler;
     return () => {
         updateScheduler && updateScheduler();
@@ -510,7 +512,7 @@ function useEffect(callback: effectArgTs, deps?: effectArgDepTs) {
 }
 
 function watchEffect<T>(target: T, deps: effectArgDepTs, scheduler = <T>(v: T) => v) {
-    if (_judgeCurrentState()) return;
+    _judgeCurrentState();
     let [result, setResult] = createCurrentState(null, {
         isToRef: false,
     }) as createCurrentStateResult;
@@ -529,12 +531,12 @@ function useMemo(target: Function, deps?: effectArgDepTs) {
 }
 
 function useId() {
-    if (_judgeCurrentState()) return;
+    _judgeCurrentState();
     return `:vid${currentState && ++currentState.refId}`;
 }
 
 function useSyncExternalStore(subscribe: Function, getSnapshot: Function) {
-    if (_judgeCurrentState()) return;
+    _judgeCurrentState();
     const _currentState = currentState as StateOption;
     let [dispatcher, setDispatcher] = createCurrentState(null, {
         scheduler: () => void 0,
@@ -563,7 +565,7 @@ const useReducerOptions = {
 
 // @ts-ignore
 function useReducer<TT, TT2>(reducer: <T>(arg: T, arg2: object) => T, initialArg: TT2, init?: (v: TT2) => any): [TT2, (arg: object) => void] | null {
-    if (_judgeCurrentState()) return null;
+    _judgeCurrentState();
     const [isInit, setInit] = createCurrentState(false, useReducerOptions) as createCurrentStateResult;
     if (typeof init === "function" && !isInit) {
         initialArg = init(initialArg);
@@ -665,19 +667,19 @@ function useDefineSlots<T extends SlotsDto, K extends string | Array<string>>(sl
 
 type KeysOfComponentContext = keyof ComponentContext;
 
-function useComponentContextValue<T extends KeysOfComponentContext>(name?: T): ComponentContext | ComponentContext[T] | null {
+function useComponentContextValue<T extends KeysOfComponentContext>(name?: T) {
     if (_judgeCurrentState() || !currentRenderComponentContext) {
         return null;
     }
-    return (arguments.length && name ? currentRenderComponentContext[name] : currentRenderComponentContext) || null;
+    return (arguments.length && name ? currentRenderComponentContext[name] as ComponentContext[T] : currentRenderComponentContext as ComponentContext) || null;
 }
 
 function useSlots2() {
     return useComponentContextValue("slots");
 }
 
-function useContext2() {
-    return useComponentContextValue();
+function useContext2(): ComponentContext {
+    return useComponentContextValue() as ComponentContext;
 }
 
 function useAttrs2() {
@@ -689,7 +691,7 @@ function useEmit() {
 }
 
 function useProps() {
-    return useComponentContextValue("props");
+    return useComponentContextValue("props") as any;
 }
 
 function transformVNodeFunctionComponentTypeWithMemo<T extends VNodeNormalizedChildren>(vnode: T): T {
@@ -878,9 +880,9 @@ function closeCacheEntrance() {
 }
 
 interface DefineCacheFCOptions {
-    name: string;
-    props: ComponentPropsOptions,
-    emits: EmitsOptions
+    name?: string;
+    props?: ComponentPropsOptions,
+    emits?: EmitsOptions
     fallback?: Function
     loading?: Function
     error?: Function
@@ -1115,7 +1117,7 @@ function getCurrentInstanceExposed() {
 }
 
 function useRefImpl<T>(initValue: T) {
-    if (_judgeCurrentState()) return;
+    _judgeCurrentState();
     return createCurrentState(ref<T>(initValue), {
         isToRef: false,
     })[0] as Ref<T>;
@@ -1165,7 +1167,7 @@ function defineFunctionSlots(context: VNode | VNode[] | DefineFunctionSlotTs | R
 
 function useEffectScope(fn: () => any | (() => any), deps: effectArgDepTs) {
 
-    if (_judgeCurrentState()) return;
+    _judgeCurrentState();
 
     let [scope, setScope] = createCurrentState(null, {
         isToRef: false,
@@ -1173,19 +1175,22 @@ function useEffectScope(fn: () => any | (() => any), deps: effectArgDepTs) {
     }) as [EffectScope, any];
 
     useEffectSync(() => {
-        if (scope) {
-            scope.stop();
-        }
         scope = new EffectScope();
         setScope(scope);
         scope.run(fn);
+
+        return () => {
+
+            scope.stop();
+        };
+
     }, deps);
 
 }
 
 function usePureState<T>(target?: T) {
 
-    if (_judgeCurrentState()) return;
+    _judgeCurrentState();
     const effect = getCurrentCacheInstance()?.effect;
     const updateScheduler = useCallback(() => {
         ((effect as StateOption).updateScheduler as Function)();
