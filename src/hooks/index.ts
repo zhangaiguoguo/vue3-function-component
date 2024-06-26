@@ -5,10 +5,10 @@ import type {
     SetupContext,
     VNode,
     VNodeNormalizedChildren,
+    ComponentInternalInstance,
 } from "vue";
 import {
     EffectScope,
-    ComponentInternalInstance,
     customRef,
     Fragment,
     getCurrentInstance,
@@ -845,13 +845,28 @@ interface CurrentCacheInstanceTs {
 
 const currentCacheInstance: CurrentCacheInstanceTs[] = [];
 
+interface CurrentInstanceContextDto {
+    proxy: {
+        $el: object | null
+    } | null;
+}
+
+let currentInstanceContext: CurrentInstanceContextDto | null = null;
+
+function getCurrentInstance2() {
+    return currentInstanceContext || getCurrentInstance();
+}
+
+function setCurrentInstanceContext(v: CurrentInstanceContextDto) {
+    currentInstanceContext = v;
+}
+
 function useCacheEntrance() {
-    const instance = getCurrentInstance();
+    const instance = getCurrentInstance2();
     if (!instance) {
         warn("useCacheEntrance", "not find currentInstance");
         return;
     }
-    const { proxy } = instance;
     if (!instanceCacheMps.has(instance)) {
         instanceCacheMps.set(instance, {
             parent: null,
@@ -1206,6 +1221,8 @@ function usePureState<T>(target?: T) {
 }
 
 export {
+    setCurrentInstanceContext,
+    getCurrentInstance2,
     usePureState,
     useEffectScope,
     defineFunctionSlots,
