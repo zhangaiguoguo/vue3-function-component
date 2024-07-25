@@ -95,7 +95,9 @@ export interface StateOption {
     updateFlag: Ref<boolean>
 }
 
-const tasks: taskItemFn[] = [];
+const tasks = new WeakSet<taskItemFn>();
+
+// console.log(tasks);
 
 let currentState: StateOption | null = null;
 
@@ -157,12 +159,13 @@ const def = <T, K extends keyof T>(obj: T, key: K | PropertyKey, options?: Prope
 
 function createSelfState(dep?: taskItemFn): taskItemFn {
 
-    if (tasks.some((cb) => cb === dep)) {
-        return tasks.find((cb) => cb === dep) as taskItemFn;
+    if (tasks.has(<() => StateOption>dep)) {
+        return dep as taskItemFn;
     }
     const state = createState();
-
-    return tasks[tasks.push(() => state) - 1];
+    const fn = () => state;
+    tasks.add(fn);
+    return fn;
 }
 
 function createCacheEffectTask() {
@@ -974,6 +977,8 @@ function defineCacheFC(callback: DefineFunctionComputedOptionsRenderResolveRespo
 
             const cacheInstance = getCurrentCacheInstance() as CurrentCacheInstanceTs;
 
+            // console.log(cacheInstance);
+
             try {
 
                 setCurrentState(cacheInstance.effect || (cacheInstance.effect = createCacheEffectTask()));
@@ -1159,17 +1164,17 @@ function defineFunctionSlots(context: VNode | VNode[] | DefineFunctionSlotTs | R
                 return {
                     default: context,
                 };
-            } else {
-                const slots = {};
-                for (let slotFn of arguments) {
-                    if (isFunction(slotFn)) {
-                        slots[slotFn.name || "default"] = slotFn;
-                    } else {
-                        Object.assign(slots, slotFn);
-                    }
-                }
-                return slots;
             }
+
+            const slots = {};
+            for (let slotFn of arguments) {
+                if (isFunction(slotFn)) {
+                    slots[slotFn.name || "default"] = slotFn;
+                } else {
+                    Object.assign(slots, slotFn);
+                }
+            }
+            return slots;
         } else {
             for (let slotName in context) {
                 if (!isFunction(context[slotName])) {
