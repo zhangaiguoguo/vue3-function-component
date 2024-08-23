@@ -1153,7 +1153,7 @@ function useReactive<T>(value: T) {
 
 type DefineFunctionSlotTs = (...args: any[]) => VNode | VNode[] | null | void
 
-function defineFunctionSlots(context: VNode | VNode[] | DefineFunctionSlotTs | Record<string, DefineFunctionSlotTs>, ...args: (DefineFunctionSlotTs | Record<string, DefineFunctionSlotTs>)[]) {
+function defineFunctionSlots(context: any & (VNode | VNode[] | DefineFunctionSlotTs | Record<string, DefineFunctionSlotTs>), ...args: (DefineFunctionSlotTs | Record<string, DefineFunctionSlotTs>)[]) {
     if (context)
         if (isVNode(context)) {
             return {
@@ -1175,12 +1175,16 @@ function defineFunctionSlots(context: VNode | VNode[] | DefineFunctionSlotTs | R
                 }
             }
             return slots;
-        } else {
+        } else if (typeof context === "object" && context && !isArray(context)) {
             for (let slotName in context) {
                 if (!isFunction(context[slotName])) {
                     context[slotName] = () => context[slotName];
                 }
             }
+        } else {
+            return {
+                default: () => context,
+            };
         }
     return context;
 }
