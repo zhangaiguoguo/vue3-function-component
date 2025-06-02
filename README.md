@@ -16,3 +16,9 @@ If the standalone TypeScript plugin doesn't feel fast enough to you, Volar has a
    1. Run `Extensions: Show Built-in Extensions` from VSCode's command palette
    2. Find `TypeScript and JavaScript Language Features`, right click and select `Disable (Workspace)`
 2. Reload the VSCode window by running `Developer: Reload Window` from the command palette.
+
+
+该项目是一个可以在vue3模式下 使用函数式组件 
+   在vue3默认的函数式组件下 如果组件重新渲染 会导致函数里的数据状态丢失 本项目解决了该问题
+   项目集成了react hooks函数 可以在vue3中使用该hooks 函数
+   增加了异步函数功能 类似于vue3 defineAsyncComponent功能
