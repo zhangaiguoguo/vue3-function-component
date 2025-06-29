@@ -1,0 +1,1 @@
+export { defineFunctionComponent } from "./src/defineFunctionComponent";

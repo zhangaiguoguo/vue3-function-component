@@ -1,70 +1,76 @@
 <script setup lang="tsx">
+import { defineFunctionComponent } from "@/vueFunctionComponent";
+import { onMounted, onUnmounted, ref } from "vue";
 
-import HelloWorld from '@/components/HelloWorld.vue';
-import { createVNode, h, onMounted, ref } from "vue";
-
-const msg = ref('Vite + Vue')
-const count = ref(1)
+onUnmounted(() => {
+  console.log("app destory");
+});
 
 onMounted(() => {
-})
+  console.log("app mounted");
+});
 
-defineExpose({
-    msg
-})
-
-
-const A = {
-    setup(_props, _context) {
-        const num = ref(1)
-        const done = ref(true)
-        return () => {
-            const a = { onClick: () => num.value++, num: num.value }
-            return num.value % 2 ? [
-                h('div', { num: num.value }, '你好 - a'),
-                h('div', '你好'),
-                h('input', {
-                    type: "checkbox",
-                    checked: done.value, 'onInput': ({ target }: InputEventInit) => {
-                        done.value = target.checked
-                    }
-                }),
-                h('br'),
-                createVNode('button', a, `点击${num.value}`, 0, []),
-                h(HelloWorld, { msg: count.value }),
-            ] : [
-                h(HelloWorld, { msg: count.value }),
-                h('div', { num: num.value }, '你好 - a'),
-                h('div', '你好'),
-                createVNode('button', a, `点击${num.value}`, 0, []),
-            ]
-        }
-    }
-}
-
-
+const A = defineFunctionComponent(
+  {
+    loader() {
+      return new Promise((resolve) => {
+        // a;
+        setTimeout(() => {
+          resolve((props, context) => {
+            console.log(props, context);
+            return (
+              <div>
+                <h1>A</h1>
+                <B />
+              </div>
+            );
+          });
+        }, 1000);
+      });
+    },
+    loading: () => <div>Loading A...</div>,
+    error(props) {
+      console.log(props.error);
+      return <div>Error loading A {props.error + ""}</div>;
+    },
+  },
+  {
+    name: "A",
+    props: {
+      a: {},
+      b: {},
+    },
+  }
+);
+const B = defineFunctionComponent({
+  loader() {
+    return new Promise((resolve) => {
+      a
+      setTimeout(() => {
+        resolve(() => {
+          return (
+            <div>
+              <h1>B</h1>
+            </div>
+          );
+        });
+      }, 1000);
+    });
+  },
+  error(){
+    return "error"
+  },
+  loading(){
+    return <div>B loading...</div>
+  }
+});
+const count = ref(0);
 </script>
-
 <template>
-    <button @click="count++">点击{{ count }}</button>
-    <hr>
-    <A />
-    <hr>
+  <div>
+    <div>
+      <button @click="count++">count++{{ count }}</button>
+    </div>
+    <A :a="1" :b="count" />
+  </div>
 </template>
-
-<style scoped>
-.logo {
-    height: 6em;
-    padding: 1.5em;
-    will-change: filter;
-    transition: filter 300ms;
-}
-
-.logo:hover {
-    filter: drop-shadow(0 0 2em #646cffaa);
-}
-
-.logo.vue:hover {
-    filter: drop-shadow(0 0 2em #42b883aa);
-}
-</style>

@@ -1,0 +1,14 @@
+{
+    "name": "vue3-function-component",
+    "version": "1.0.0",
+    "description": "A Vue 3 project using function components with TypeScript and JSX",
+    "main": "packages/main",
+    "dependencies": {
+        "eslint-plugin-import-x": "^4.16.1"
+    },
+    "devDependencies": {
+        "@types/node": "^24.0.7",
+        "@vitest/eslint-plugin": "^1.3.3",
+        "typescript-eslint": "^8.35.0"
+    }
+}

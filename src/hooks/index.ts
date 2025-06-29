@@ -22,64 +22,6 @@ import { is, isArray, isFunction, transformArray } from "@/hooks/utils";
 import { JSX } from "vue/jsx-runtime";
 import { ComponentPublicInstance } from "@vue/runtime-core";
 
-const modelPropsMsp = new WeakMap();
-
-export function useIsProps(key: string, instance?: any) {
-    instance = instance || getCurrentInstance();
-    if (key in instance.props) {
-        return true;
-    }
-    return false;
-}
-
-interface ComponentInternalInstance2 extends ComponentInternalInstance {
-    emitsOptions: any;
-    parent: ComponentInternalInstance2;
-    ctx: {
-        [key: string]: any
-    };
-}
-
-function useSetModelProp(key: string, value: any, instance: ComponentInternalInstance2) {
-    const emitEventKey = "update:" + key;
-    const emitsOptions = instance.emitsOptions;
-    if (emitsOptions && emitsOptions[emitEventKey]) {
-        instance.emit(emitEventKey, value);
-    } else {
-        if (useIsProps(key, instance)) {
-            useSetModelProp(key, value, instance.parent);
-        } else if (instance.ctx && key in instance.ctx) {
-            instance.ctx[key] = value;
-        } else if (instance.exposeProxy && key in instance.exposeProxy) {
-            instance.exposeProxy[key] = value;
-        }
-    }
-}
-
-export function useModelProps(key: string) {
-    const proxy: any = getCurrentInstance();
-    if (proxy) {
-        const weakMap = modelPropsMsp.get(proxy) || modelPropsMsp.set(proxy, new Map()).get(proxy);
-        if (weakMap.has(key)) {
-            return weakMap.get(key);
-        }
-        const _ref = customRef(function(track, trigger) {
-            return {
-                get() {
-                    track();
-                    return proxy.props[key];
-                },
-                set(v) {
-                    useSetModelProp(key, v, proxy);
-                    trigger();
-                },
-            };
-        });
-        weakMap.set(key, _ref);
-        return _ref;
-    }
-}
-
 export type taskItemFn = () => StateOption
 
 export interface StateOption {
