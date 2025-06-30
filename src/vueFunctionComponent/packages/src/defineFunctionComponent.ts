@@ -9,12 +9,14 @@ import {
   type SetupContext,
   type VNode,
   toValue,
+  type Ref,
 } from "vue";
 import { isFunction, isObject2 } from "../shared";
-import { onUnmounted } from "./lifeCycle";
+import { onMounted, onUnmounted } from "./lifeCycle";
+import { type EffectQueue } from "./hooks";
 
 export type DefineFunctionComponentRender = ((
-  props: ComponentInternalInstance["props"],
+  props: Record<string, any>,
   context: SetupContext
 ) => VNode | VNode[] | any) & {
   [__v_FC_component]?: boolean;
@@ -38,13 +40,24 @@ interface DefineFunctionComponentOptions {
   slots?: Slots;
 }
 
-interface DefineFunctionComponentInstanceContext {
+export interface DefineFunctionComponentInstanceContext {
+  updateReactiveData: Ref<number>;
   parent: DefineFunctionComponentInstanceContext | null;
   instance: ComponentInternalInstance | null;
-  effect?: {} | null;
+  effect?: EffectQueue | null;
   exposed?: Record<string, any>;
   props: ComponentInternalInstance["props"];
   context: SetupContext;
+  hooks: DefineFunctionComponentInstanceContextHooks;
+  uid?: number;
+}
+
+interface DefineFunctionComponentInstanceContextHooks {
+  update: Function;
+  call: <T extends (...args: any[]) => any>(
+    fn: T,
+    ...args: any[]
+  ) => ReturnType<T>;
 }
 
 const __v_FC_component = "__v_FC_component";
@@ -84,8 +97,28 @@ function defineFunctionComponentContext() {
     functionComponentIntanceMap.set(
       instance,
       (context = {
+        updateReactiveData: ref(0),
         parent: null,
         instance: instance,
+        hooks: {
+          update: (target = context.updateReactiveData) => {
+            const e = context.instance?.effect;
+            if (e) {
+              e.dirty = true;
+              if (e.scheduler) {
+                e.scheduler();
+              } else {
+                context.instance?.update();
+              }
+            } else {
+              target.value++;
+            }
+          },
+          call(fn: (...args: any[]) => any, ...args: any[]) {
+            toValue(context.updateReactiveData);
+            return fn(...args);
+          },
+        },
       } as any)
     );
     flag = true;
@@ -177,8 +210,6 @@ export function defineFunctionComponent(
 
   const instanceRender = ref<DefineFunctionComponentRender | null>(render);
 
-  let resultExamineStateTasks: any;
-
   let renderError: Error | string | void;
 
   const handlers = {
@@ -192,10 +223,20 @@ export function defineFunctionComponent(
 
       defineFunctionComponentContext();
 
-      const cacheInstance = {};
-
-      console.log(currentInstanceContext, prevFunctionIntanceContext);
-
+      console.log(currentInstanceContext);
+      onMounted(() => {
+        debugger;
+        console.log("xxxx");
+      });
+      if (currentInstanceContext?.effect) {
+        currentInstanceContext.effect.prevLast =
+          currentInstanceContext.effect.last ?? null;
+        currentInstanceContext.effect.last = null;
+      }
+      const prevEffect = currentInstanceContext!.effect;
+      if (currentInstanceContext!.uid !== void 0) {
+        currentInstanceContext!.uid = 0;
+      }
       try {
         const renderFn = toValue(instanceRender);
         switch (renderFlag) {
@@ -251,17 +292,27 @@ export function defineFunctionComponent(
             }
             break;
         }
+        if (currentInstanceContext!.effect === void 0) {
+          currentInstanceContext!.effect ??= null;
+        } else {
+          if (prevEffect !== void 0) {
+            if (
+              currentInstanceContext!.effect?.prevLast !==
+              currentInstanceContext!.effect?.last
+            ) {
+              throw new Error(
+                "The hook for rendering is different from expected. This may be caused by an unexpected premature return statement."
+              );
+            }
+          }
+        }
       } catch (err: any) {
         if (process.env.NODE_ENV !== "production") {
-          warn("defineFunctionComponent render function error", err.toString());
+          warn("defineFunctionComponent render function error", err);
         }
+        renderResult = null;
       } finally {
-        if (renderFlag !== DefineFunctionComponentRenderType.ASYNC_FUNCTION) {
-          if (resultExamineStateTasks) {
-            resultExamineStateTasks.stop();
-          }
-          currentInstanceContext = prevFunctionIntanceContext || null;
-        }
+        currentInstanceContext = prevFunctionIntanceContext || null;
       }
 
       return renderResult;
