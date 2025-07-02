@@ -61,7 +61,7 @@ const B = defineFunctionComponent(() => {
 const count = ref(0);
 </script>
 <template>
-  <div>
+  <div class="app_class">
     <div>
       <button @click="count++">count++{{ count }}</button>
     </div>
