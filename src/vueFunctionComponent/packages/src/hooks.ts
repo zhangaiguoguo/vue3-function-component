@@ -11,6 +11,7 @@ enum EffectQueueFlag {
   USE_ID = 3,
   USE_CALLBACK = 4,
   USE_LAYOUT_EFFECT = 5,
+  USE_MEMO = 6,
 }
 
 enum EffectFlagName {
@@ -19,6 +20,7 @@ enum EffectFlagName {
   USE_ID = "useId",
   USE_CALLBACK = "useCallback",
   USE_LAYOUT_EFFECT = "useLayoutEffect",
+  USE_MEMO = "useMemo",
 }
 
 type EffectCallbackAnyFunction = () => any;
@@ -38,6 +40,7 @@ export interface EffectQueue<T = any> {
 
 interface EffectHooks {
   destroy?: EffectCallbackAnyFunction | void;
+  update?: Function;
 }
 
 type SetStateAction<S> = S | ((prevState: S) => S);
@@ -92,30 +95,35 @@ function defineHookQueue<T>(
       effect = currentInstanceContext.effect = createEffectQueueCallback(
         currentInstanceContext
       );
+      effect.last = effect;
     } else if (effect === null) {
       throw new Error(generateHookError(null, null, queueFlag));
-    }
-    if (effect.last && effect.last === effect.prevLast) {
-      throw new Error(generateHookError(effect, null, queueFlag));
-    }
-    if (effect.last) {
-      let next = effect.last.next as EffectQueue<T>;
-      if (!next) {
-        next = effect.last.next = createEffectQueueCallback(
-          currentInstanceContext
-        );
-      }
-      if (next.flag !== queueFlag) {
-        effect.last = effect.prevLast ?? null;
-        throw new Error(generateHookError(effect, next, queueFlag));
-      }
-      effect.last = next;
     } else {
-      if (effect.flag !== queueFlag) {
-        effect.last = effect.prevLast ?? null;
-        throw new Error(generateHookError(effect, effect, queueFlag));
+      if (effect.last && effect.last === effect.prevLast) {
+        throw new Error(generateHookError(effect, null, queueFlag));
       }
-      effect.last = effect;
+      if (effect.last) {
+        let next = effect.last.next as EffectQueue<T>;
+        if (!next) {
+          next = effect.last.next = createEffectQueueCallback(
+            currentInstanceContext
+          );
+        } else if (next.flag !== queueFlag) {
+          effect.last = effect.prevLast ?? null;
+          throw new Error(generateHookError(effect, next, queueFlag));
+        } else {
+          next.hooks?.update?.();
+        }
+        effect.last = next;
+      } else {
+        if (effect.flag !== queueFlag) {
+          effect.last = effect.prevLast ?? null;
+          throw new Error(generateHookError(effect, effect, queueFlag));
+        } else {
+          effect.hooks?.update?.();
+        }
+        effect.last = effect;
+      }
     }
     return effect.last;
   } else {
@@ -132,12 +140,23 @@ function effectDependenciesDiff(
   dependencies: any[] | void | null,
   effect: EffectQueue
 ) {
-  return (
-    (dependencies !== effect.deps || dependencies == null) &&
-    (dependencies && effect.deps
-      ? dependencies.length !== effect.deps?.length ||
+  return dependencies !== effect.deps
+    ? dependencies == null ||
+        effect.deps == null ||
+        dependencies.length !== effect.deps?.length ||
         dependencies.some((v, i) => hasChanged(effect.deps![i], v))
-      : true)
+    : dependencies === null || dependencies === void 0;
+}
+
+function effectDependenciesDiffBase(
+  dependencies: any[] | void | null,
+  effect: EffectQueue
+) {
+  return (
+    dependencies !== effect.deps &&
+    dependencies &&
+    (dependencies.length !== effect.deps?.length ||
+      dependencies.some((v, i) => hasChanged(effect.deps![i], v)))
   );
 }
 
@@ -148,10 +167,7 @@ let dispatcher = {
       (currentInstanceContext) => {
         return {
           flag: EffectQueueFlag.USE_STATE,
-          action: currentInstanceContext.hooks.call(
-            patchInitialState,
-            initialState
-          ),
+          action: patchInitialState(initialState),
           dispatch: (value) => {
             const prevValue = effectQueue.action;
             effectQueue.action = patchInitialState(value);
@@ -182,10 +198,7 @@ let dispatcher = {
         action: void 0,
       };
     });
-    if (
-      dependencies.length !== effectQueue.deps?.length ||
-      dependencies.some((v, i) => hasChanged(effectQueue.deps![i], v))
-    ) {
+    if (effectDependenciesDiffBase(dependencies, effectQueue)) {
       effectQueue.deps = dependencies;
       effectQueue.action = fn as any;
     }
@@ -213,6 +226,21 @@ let dispatcher = {
       });
     }
   },
+  useMemo<T>(calculateValue: () => T, dependencies: Array<any>) {
+    const effectQueue = defineHookQueue<T>(EffectQueueFlag.USE_MEMO, () => {
+      return {
+        flag: EffectQueueFlag.USE_MEMO,
+        action: calculateValue(),
+        deps: dependencies,
+      };
+    });
+
+    if (effectDependenciesDiffBase(dependencies, effectQueue)) {
+      effectQueue.deps = dependencies;
+      effectQueue.action = calculateValue();
+    }
+    return effectQueue.action as unknown as T;
+  },
 };
 
 export function useState<S>(
@@ -224,32 +252,10 @@ export function useState<S = undefined>(): [
   Dispatch<SetStateAction<S | undefined>>
 ];
 
-/**
- * @example
- *  ```tsx
- *    const A = defineFunctionComponent(() => { 
- *      const [msg,setMsg] = useState();
- *      const [count,setCount] = useState(1);
- *      return <>
-          <button onClick={() => setCount(count + 1)}>count++ {count}</button>
- *      </>
- *    })
- *  ```
-*/
 export function useState<T>(initialState?: T) {
   return dispatcher.useState(initialState);
 }
 
-/**
- * @example
- *  ```tsx
- *    const A = defineFunctionComponent(() => {
- *      const id = useId();
- *      const id2 = useId();
- *      return <>1</>
- *    })
- *  ```
- */
 export function useId() {
   return dispatcher.useId();
 }
@@ -263,7 +269,18 @@ export function useCallback<T extends Function>(
 
 export function useEffect(
   setup: EffectCallback,
+  dependencies: Array<any>
+): void;
+export function useEffect(setup: EffectCallback): void;
+export function useEffect(setup: EffectCallback, dependencies: null): void;
+
+export function useEffect(
+  setup: EffectCallback,
   dependencies: Array<any> | void | null
 ) {
   return dispatcher.useEffect(setup, dependencies);
+}
+
+export function useMemo<T>(calculateValue: () => T, dependencies: Array<any>) {
+  return dispatcher.useMemo(calculateValue, dependencies);
 }

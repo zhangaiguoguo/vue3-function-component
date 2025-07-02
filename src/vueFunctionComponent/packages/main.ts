@@ -1,3 +1,3 @@
 export { defineFunctionComponent } from "./src/defineFunctionComponent";
 
-export { useState, useId, useCallback, useEffect } from "./src/hooks";
+export { useState, useId, useCallback, useEffect, useMemo } from "./src/hooks";

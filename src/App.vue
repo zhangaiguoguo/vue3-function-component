@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useMemo,
   useState,
 } from "@/vueFunctionComponent";
 import { getCurrentInstance, onMounted, onUnmounted, ref } from "vue";
@@ -34,6 +35,12 @@ const A = defineFunctionComponent(
         console.log(2);
       };
     }, [count]);
+
+    console.log(
+      useMemo(() => ({
+        count: count
+      }), [count])
+    );
     return (
       <div>
         <h1>A - {count * props.a}</h1>

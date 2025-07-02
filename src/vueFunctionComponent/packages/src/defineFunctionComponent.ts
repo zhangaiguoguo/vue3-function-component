@@ -9,7 +9,6 @@ import {
   type SetupContext,
   type VNode,
   toValue,
-  type Ref,
 } from "vue";
 import { isFunction, isObject2 } from "../shared";
 import { onMounted, onUnmounted } from "./lifeCycle";
@@ -41,7 +40,6 @@ interface DefineFunctionComponentOptions {
 }
 
 export interface DefineFunctionComponentInstanceContext {
-  updateReactiveData: Ref<number>;
   parent: DefineFunctionComponentInstanceContext | null;
   instance: ComponentInternalInstance | null;
   effect?: EffectQueue | null;
@@ -54,10 +52,6 @@ export interface DefineFunctionComponentInstanceContext {
 
 interface DefineFunctionComponentInstanceContextHooks {
   update: Function;
-  call: <T extends (...args: any[]) => any>(
-    fn: T,
-    ...args: any[]
-  ) => ReturnType<T>;
 }
 
 const __v_FC_component = "__v_FC_component";
@@ -97,11 +91,10 @@ function defineFunctionComponentContext() {
     functionComponentIntanceMap.set(
       instance,
       (context = {
-        updateReactiveData: ref(0),
         parent: null,
         instance: instance,
         hooks: {
-          update: (target = context.updateReactiveData) => {
+          update: () => {
             const e = context.instance?.effect;
             if (e) {
               e.dirty = true;
@@ -110,14 +103,8 @@ function defineFunctionComponentContext() {
               } else {
                 context.instance?.update();
               }
-            } else {
-              target.value++;
             }
-          },
-          call(fn: (...args: any[]) => any, ...args: any[]) {
-            toValue(context.updateReactiveData);
-            return fn(...args);
-          },
+          }
         },
       } as any)
     );
@@ -224,10 +211,6 @@ export function defineFunctionComponent(
       defineFunctionComponentContext();
 
       console.log(currentInstanceContext);
-      onMounted(() => {
-        debugger;
-        console.log("xxxx");
-      });
       if (currentInstanceContext?.effect) {
         currentInstanceContext.effect.prevLast =
           currentInstanceContext.effect.last ?? null;
