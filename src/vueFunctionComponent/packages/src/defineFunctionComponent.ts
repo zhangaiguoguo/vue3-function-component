@@ -104,7 +104,7 @@ function defineFunctionComponentContext() {
                 context.instance?.update();
               }
             }
-          }
+          },
         },
       } as any)
     );
@@ -114,6 +114,14 @@ function defineFunctionComponentContext() {
   currentInstanceContext = context;
   if (flag) {
     onUnmounted(() => {
+      let effect = context.effect;
+      while (effect) {
+        if (effect.hooks?.destroy) {
+          effect.hooks.destroy();
+        }
+        effect = effect.next;
+      }
+      instance.uid = 0;
       functionComponentIntanceMap.delete(instance);
     });
   }
@@ -234,10 +242,15 @@ export function defineFunctionComponent(
             renderResult = renderFn!(props, context);
             break;
           case DefineFunctionComponentRenderType.ASYNC_FUNCTION:
+            const currentContext = currentInstanceContext;
             const promiseRes = Promise.resolve((renderFn as any)());
             renderFlag = DefineFunctionComponentRenderType.LOADING;
             promiseRes
               .then((render: DefineFunctionComponentRender) => {
+                if (currentContext?.instance?.isUnmounted) {
+                  instanceRender.value = null;
+                  return;
+                }
                 if (!isFunction(render)) {
                   if (process.env.NODE_ENV !== "production") {
                     warn(
