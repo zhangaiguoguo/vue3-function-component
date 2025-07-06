@@ -58,6 +58,7 @@ const A = defineFunctionComponent(
     },
   }
 );
+
 const B = defineFunctionComponent(() => {
   return (
     <div>
