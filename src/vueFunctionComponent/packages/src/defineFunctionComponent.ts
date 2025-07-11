@@ -12,7 +12,7 @@ import {
 } from "vue";
 import { isFunction, isObject2 } from "../shared";
 import { onMounted, onUnmounted } from "./lifeCycle";
-import { type EffectQueue } from "./hooks";
+import { type EffectQueue } from "./hooks/dispatcher";
 
 export type DefineFunctionComponentRender = ((
   props: Record<string, any>,
@@ -42,16 +42,20 @@ interface DefineFunctionComponentOptions {
 export interface DefineFunctionComponentInstanceContext {
   parent: DefineFunctionComponentInstanceContext | null;
   instance: ComponentInternalInstance | null;
-  effect?: EffectQueue | null;
+  memoizedEffect: {
+    queue: EffectQueue | null;
+    last: EffectQueue | null;
+    prevLast: EffectQueue | null;
+  };
   exposed?: Record<string, any>;
   props: ComponentInternalInstance["props"];
   context: SetupContext;
   hooks: DefineFunctionComponentInstanceContextHooks;
-  uid?: number;
+  uid: number;
 }
 
 interface DefineFunctionComponentInstanceContextHooks {
-  update: Function;
+  update: () => void;
 }
 
 const __v_FC_component = "__v_FC_component";
@@ -74,6 +78,14 @@ export function getCurrentFunctionComponentInstance() {
   return currentInstanceContext;
 }
 
+function createInstanceMemoized(): DefineFunctionComponentInstanceContext["memoizedEffect"] {
+  return {
+    queue: null,
+    prevLast: null,
+    last: null,
+  };
+}
+
 function defineFunctionComponentContext() {
   const instance = getCurrentInstance() as ComponentInternalInstance;
   if (!instance && process.env.NODE_ENV !== "production") {
@@ -83,7 +95,6 @@ function defineFunctionComponentContext() {
     );
     return;
   }
-  let flag = false;
   let context = functionComponentIntanceMap.get(
     instance
   ) as DefineFunctionComponentInstanceContext;
@@ -106,25 +117,25 @@ function defineFunctionComponentContext() {
             }
           },
         },
+        memoizedEffect: createInstanceMemoized(),
+        uid: 0,
       } as any)
     );
-    flag = true;
-  }
-  context.parent = functionComponentIntanceMap.get(instance.parent!) ?? null;
-  currentInstanceContext = context;
-  if (flag) {
+    currentInstanceContext = context;
     onUnmounted(() => {
-      let effect = context.effect;
+      let effect = context.memoizedEffect.queue;
       while (effect) {
         if (effect.hooks?.destroy) {
           effect.hooks.destroy();
         }
-        effect = effect.next;
+        effect = effect.next ?? null;
       }
       instance.uid = 0;
       functionComponentIntanceMap.delete(instance);
     });
   }
+  context.parent = functionComponentIntanceMap.get(instance.parent!) ?? null;
+  currentInstanceContext = context;
 }
 
 enum DefineFunctionComponentRenderType {
@@ -219,15 +230,12 @@ export function defineFunctionComponent(
       defineFunctionComponentContext();
 
       console.log(currentInstanceContext);
-      if (currentInstanceContext?.effect) {
-        currentInstanceContext.effect.prevLast =
-          currentInstanceContext.effect.last ?? null;
-        currentInstanceContext.effect.last = null;
+      const memoizedEffect = currentInstanceContext!.memoizedEffect;
+      if (memoizedEffect && memoizedEffect.queue) {
+        memoizedEffect.prevLast = memoizedEffect.last ?? null;
+        memoizedEffect.last = null;
       }
-      const prevEffect = currentInstanceContext!.effect;
-      if (currentInstanceContext!.uid !== void 0) {
-        currentInstanceContext!.uid = 0;
-      }
+      const prevQueue = memoizedEffect?.queue;
       try {
         const renderFn = toValue(instanceRender);
         switch (renderFlag) {
@@ -288,18 +296,11 @@ export function defineFunctionComponent(
             }
             break;
         }
-        if (currentInstanceContext!.effect === void 0) {
-          currentInstanceContext!.effect ??= null;
-        } else {
-          if (prevEffect !== void 0) {
-            if (
-              currentInstanceContext!.effect?.prevLast !==
-              currentInstanceContext!.effect?.last
-            ) {
-              throw new Error(
-                "The hook for rendering is different from expected. This may be caused by an unexpected premature return statement."
-              );
-            }
+        if (prevQueue !== null) {
+          if (memoizedEffect?.prevLast !== memoizedEffect?.last) {
+            throw new Error(
+              "The hook for rendering is different from expected. This may be caused by an unexpected premature return statement."
+            );
           }
         }
       } catch (err: any) {
