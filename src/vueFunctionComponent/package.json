@@ -9,7 +9,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/zhangaiguoguo/vue2-reactivity-plugin.git"
+    "url": "https://github.com/zhangaiguoguo/vue3-function-component.git"
   },
   "dependencies": {
     "eslint-plugin-import-x": "^4.16.1"

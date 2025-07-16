@@ -7,9 +7,8 @@ import {
   useCallback,
   useContext,
   useSetupContext,
-  useState,
+  useState,useSlots
 } from "@/vueFunctionComponent";
-import { useSlots } from "vue";
 
 const C = createContext(123);
 const C2 = createContext(173);
