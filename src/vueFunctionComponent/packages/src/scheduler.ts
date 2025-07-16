@@ -27,11 +27,10 @@ const taskQueues = new Map<number, Task[]>([
 
 let isPerformingWork = false;
 let currentTaskId: symbol | null = null;
-let syncTaskQueue: Task[] = []; // 专门存放同步任务
 
 // 调度器状态
 const schedulerState = {
-  currentPriority: Priority.NORMAL, // 默认普通优先级
+  currentPriority: Priority.NORMAL,
   isExecutingTask: false,
 };
 /**
@@ -42,7 +41,7 @@ export function getCurrentPriorityLane(): number {
 }
 
 /**
- * 调度一个任务（真正的优先级调度）
+ * 调度一个任务
  */
 export function scheduleTask(
   callback: () => void,
@@ -57,14 +56,12 @@ export function scheduleTask(
 
   // 如果是同步任务，直接放入 syncTaskQueue
   if (task.isSync) {
-    callback()
+    callback();
     return;
   }
 
-  // 否则放入对应优先级的队列
   taskQueues.get(priority)?.push(task);
 
-  // 如果当前没有执行任务，则启动调度
   if (!isPerformingWork) {
     isPerformingWork = true;
     nextTick().then(flushWork);
@@ -72,9 +69,9 @@ export function scheduleTask(
 }
 
 /**
- * 执行异步工作任务（按优先级顺序）
+ * 执行异步工作任务
  */
-async function flushWork() {
+function flushWork() {
   // 按优先级顺序处理任务：USER_INPUT > NORMAL > TRANSITION > IDLE
   const priorities = [
     Priority.USER_INPUT,
@@ -95,7 +92,7 @@ async function flushWork() {
       currentTaskId = task.id;
 
       try {
-        await task.callback(); // 异步执行（支持 async/await）
+        task.callback();
       } catch (error) {
         if (process.env.NODE_ENV !== "production") warn("Task failed:", error);
       }
@@ -110,13 +107,13 @@ async function flushWork() {
     }
   }
 
-  // 所有任务完成
-  isPerformingWork = false;
   currentTaskId = null;
 
   // 如果还有剩余任务，继续调度
   if (hasPendingTasks()) {
     nextTick().then(flushWork);
+  } else {
+    isPerformingWork = false;
   }
 }
 

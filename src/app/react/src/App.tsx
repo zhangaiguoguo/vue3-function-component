@@ -1,75 +1,41 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useState,
-  useReducer,
-  useSyncExternalStore,
-  useCallback,
-  useMemo,
-  startTransition,
-  useDeferredValue,
-  useRef,
-} from "react";
+import { useState, createContext, useContext } from "react";
 import "./App.css";
-let arr = [];
+
+const C = createContext(1);
+console.log(C);
+console.log(createContext)
 
 function App() {
   const [count, setCount] = useState(0);
-  // useLayoutEffect(() => {
-  //   console.log("useLayoutEffect");
-  // });
-
-  const [state, setState] = useReducer(
-    (s, v) => {
-      return { ...s };
-    },
-    { a: 1 }
-  );
-  useEffect(() => {
-    setState({
-      type: 1,
-      v: 1,
-    });
-  }, [count]);
-  const fns = useMemo(() => [], []);
-  const a = useSyncExternalStore(
-    useCallback((cb) => {
-      fns.push(cb);
-      return () => {
-        // console.log("destory useSyncExternalStore");
-      };
-    }, []),
-    () => {
-      console.log("getSnapshot")
-      return arr
-    }
-  );
-
-  console.log("render");
-
-  // console.log(count%2 ? useDeferredValue(1) : useRef())
 
   return (
     <>
       <div className="card">
         <button onClick={() => setCount((count) => count + 1)}>
-          count is {count} - {a}
+          count is {count}
         </button>
-        <p></p>
-        <button
-          onClick={() => {
-            arr = [...arr];
-            fns.forEach((fn) => {
-              console.log(fn);
-              startTransition(() => {
-                fn();
-              });
-            });
-          }}
-        >
-          set useSyncExternalStore
-        </button>
+        <C.Provider value={2 + count}>
+          <C.Provider value={3 + count}>
+            <C.Consumer>{Cc}</C.Consumer>
+            <B></B>
+          </C.Provider>
+          <B></B>
+        </C.Provider>
       </div>
+    </>
+  );
+}
+
+function B() {
+  const value = useContext(C);
+  return <h1>b - {value}</h1>;
+}
+
+function Cc(value) {
+  return (
+    <>
+      <h1>Cc - {value}</h1>
+      <B />
     </>
   );
 }

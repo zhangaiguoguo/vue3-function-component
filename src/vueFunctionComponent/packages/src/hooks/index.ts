@@ -43,6 +43,18 @@ export function useEffect(
   return dispatcher.useEffect(setup, dependencies);
 }
 
+export function useLayoutEffect(
+  setup: EffectCallback,
+  dependencies?: DependencyList
+): void;
+
+export function useLayoutEffect(
+  setup: EffectCallback,
+  dependencies: DependencyList | undefined
+) {
+  return dispatcher.useLayoutEffect(setup, dependencies);
+}
+
 export function useMemo<T>(
   calculateValue: () => T,
   dependencies: DependencyList
@@ -87,4 +99,24 @@ export function useDeferredValue<T>(value: T, initialValue?: T): T {
 
 export function startTransition(scope: () => any): void {
   return dispatcher.startTransition(scope);
+}
+
+export function useRef(): { current: void };
+
+export function useRef<T>(initialValue: T): { current: T };
+
+export function useRef<T>(initialValue?: T) {
+  return dispatcher.useRef(initialValue);
+}
+
+export function useImperativeHandle(
+  ref: { current: any },
+  createHandle: () => any,
+  dependencies?: DependencyList
+) {
+  return dispatcher.useImperativeHandle(ref, createHandle, dependencies);
+}
+
+export function useTransition() {
+  return dispatcher.useTransition();
 }

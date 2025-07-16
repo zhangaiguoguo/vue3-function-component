@@ -9,8 +9,11 @@ const isArray: (arg: any) => arg is any[] = (target) => Array.isArray(target);
 const hasOwnProperty2: (a: PropertyKey) => boolean =
   Object.prototype.hasOwnProperty;
 
-const hasOwn: (a: object, b: PropertyKey) => boolean = (val, key) =>
-  hasOwnProperty2.call(val, key);
+const hasOwn: <O, K extends PropertyKey>(
+  a: O,
+  b: K
+) => K extends keyof O ? true : false = (val, key) =>
+  hasOwnProperty2.call(val, key) as any;
 
 const isString: (a: any) => a is string = (val) => typeof val === "string";
 

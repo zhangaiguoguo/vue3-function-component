@@ -9,39 +9,63 @@ import {
   type SetupContext,
   type VNode,
   toValue,
+  isVNode,
+  type ComponentObjectPropsOptions,
+  type ExtractPropTypes,
+  DefineProps,
 } from "vue";
-import { isFunction, isObject2 } from "../shared";
-import { onMounted, onUnmounted } from "./lifeCycle";
+import { extend, hasOwn, isFunction, isObject2 } from "../shared";
+import { onUnmounted } from "./lifeCycle";
 import { type EffectQueue } from "./hooks/dispatcher";
+import { Priority, scheduleTask } from "./scheduler";
+import type { LooseRequired, Prettify } from "@vue/shared";
 
-export type DefineFunctionComponentRender = ((
-  props: Record<string, any>,
-  context: SetupContext
-) => VNode | VNode[] | any) & {
-  [__v_FC_component]?: boolean;
+export type DefineFunctionComponentRender<Props = Record<string, any>> = (
+  props: Props
+) => VueFunctionComponentVnode;
+
+type AsyncComponentResolveResult<T> =
+  | T
+  | {
+      default: T;
+    };
+
+export type AsyncComponentLoader<T = any> = () => Promise<
+  AsyncComponentResolveResult<T>
+>;
+
+type DefineAsyncFunctionComponentErrorRenderProps = {
+  error?: Error | string | void;
 };
 
-type DefineAsyncFunctionComponentRenderOptions = {
-  loader: () => Promise<DefineFunctionComponentRender>;
-  error?: (
-    props: {
-      error: Error | string | void;
-    } & ComponentInternalInstance["props"],
-    context: SetupContext
-  ) => ReturnType<DefineFunctionComponentRender>;
-  loading?: DefineFunctionComponentRender;
-};
+interface DefineAsyncFunctionComponentRenderOptions<
+  Props = Record<string, any>
+> {
+  loader: AsyncComponentLoader<DefineFunctionComponentRender<Props>>;
+  error?:
+    | ExoticComponent<DefineAsyncFunctionComponentErrorRenderProps>
+    | ((
+        props: DefineAsyncFunctionComponentErrorRenderProps
+      ) => VueFunctionComponentVnode);
+  loading?: ExoticComponent | (() => VueFunctionComponentVnode);
+}
 
-interface DefineFunctionComponentOptions {
+type DefineFunctionComponentOptionsProps<PropNames extends string = string> =
+  | PropNames[]
+  | ComponentObjectPropsOptions;
+
+interface DefineFunctionComponentOptions<
+  Props = DefineFunctionComponentOptionsProps
+> {
   name?: string;
-  props?: ComponentInternalInstance["props"];
+  props?: Props;
   emits?: EmitsOptions;
   slots?: Slots;
 }
 
 export interface DefineFunctionComponentInstanceContext {
   parent: DefineFunctionComponentInstanceContext | null;
-  instance: ComponentInternalInstance | null;
+  instance: ComponentInternalInstance;
   memoizedEffect: {
     queue: EffectQueue | null;
     last: EffectQueue | null;
@@ -52,13 +76,14 @@ export interface DefineFunctionComponentInstanceContext {
   context: SetupContext;
   hooks: DefineFunctionComponentInstanceContextHooks;
   uid: number;
+  firstRenderFlag: 0 | 1;
 }
 
 interface DefineFunctionComponentInstanceContextHooks {
   update: () => void;
 }
 
-const __v_FC_component = "__v_FC_component";
+const __v_FC_component = Symbol.for("vue.function.component");
 
 const functionComponentIntanceMap = new WeakMap<
   ComponentInternalInstance,
@@ -67,15 +92,8 @@ const functionComponentIntanceMap = new WeakMap<
 let currentInstanceContext: DefineFunctionComponentInstanceContext | null =
   null;
 
-export function getCurrentFunctionComponentInstance() {
-  if (!currentInstanceContext && process.env.NODE_ENV !== "production") {
-    warn(
-      "getCurrentFunctionComponentInstance",
-      "not find current function instance"
-    );
-    return;
-  }
-  return currentInstanceContext;
+export function getCurrentFunctionComponentInstance(): DefineFunctionComponentInstanceContext {
+  return currentInstanceContext as DefineFunctionComponentInstanceContext;
 }
 
 function createInstanceMemoized(): DefineFunctionComponentInstanceContext["memoizedEffect"] {
@@ -86,7 +104,10 @@ function createInstanceMemoized(): DefineFunctionComponentInstanceContext["memoi
   };
 }
 
-function defineFunctionComponentContext() {
+function defineFunctionComponentContext(
+  props: DefineFunctionComponentInstanceContext["props"] | null,
+  setupContext: SetupContext | null
+) {
   const instance = getCurrentInstance() as ComponentInternalInstance;
   if (!instance && process.env.NODE_ENV !== "production") {
     warn(
@@ -112,13 +133,21 @@ function defineFunctionComponentContext() {
               if (e.scheduler) {
                 e.scheduler();
               } else {
-                context.instance?.update();
+                scheduleTask(
+                  () => context.instance?.update(),
+                  Priority.TRANSITION
+                );
+              }
+            } else {
+              if (process.env.NODE_ENV !== "production") {
+                warn("The current instance has no updatable scheduling");
               }
             }
           },
         },
         memoizedEffect: createInstanceMemoized(),
         uid: 0,
+        firstRenderFlag: 0,
       } as any)
     );
     currentInstanceContext = context;
@@ -136,6 +165,8 @@ function defineFunctionComponentContext() {
   }
   context.parent = functionComponentIntanceMap.get(instance.parent!) ?? null;
   currentInstanceContext = context;
+  currentInstanceContext.context = setupContext as any;
+  currentInstanceContext.props = props as any;
 }
 
 enum DefineFunctionComponentRenderType {
@@ -145,11 +176,84 @@ enum DefineFunctionComponentRenderType {
   ASYNC_FUNCTION = "asyncFunction",
 }
 
+export interface ExoticComponent<P = {}> {
+  (props: P): VueFunctionComponentVnode;
+  readonly $$typeof: symbol;
+}
+
+type PatchDefineProps<
+  P,
+  PropNames extends string = string
+> = P extends PropNames[]
+  ? Prettify<
+      Readonly<{
+        [key in P[number]]?: any;
+      }>
+    >
+  : Prettify<Readonly<ExtractPropTypes<P>>>;
+
+type BooleanKey<T, K extends keyof T = keyof T> = K extends any
+  ? [T[K]] extends [boolean | undefined]
+    ? K
+    : never
+  : never;
+
+type ExtractProps<Props = DefineFunctionComponentOptionsProps> = Partial<
+  Omit<DefineFunctionComponentOptions<Props>, "props">
+> & {
+  props: Props;
+};
+
+export function defineFunctionComponent<
+  PropsType,
+  PropsData = DefineProps<LooseRequired<PropsType>, BooleanKey<PropsType>>
+>(
+  renderOptions: DefineAsyncFunctionComponentRenderOptions<PropsData>
+): ExoticComponent<PropsData>;
+
+export function defineFunctionComponent<
+  PropsType,
+  PropsData = DefineProps<LooseRequired<PropsType>, BooleanKey<PropsType>>
+>(render: DefineFunctionComponentRender<PropsData>): ExoticComponent<PropsData>;
+
+export function defineFunctionComponent<
+  R extends DefineFunctionComponentRender<PropsData>,
+  O extends ExtractProps,
+  PropsData = PatchDefineProps<O["props"]>
+>(
+  render: DefineFunctionComponentRender<PropsData>,
+  options: O
+): ExoticComponent<PropsData>;
+
+export function defineFunctionComponent<
+  O extends ExtractProps = ExtractProps,
+  PropsData = PatchDefineProps<O["props"]>,
+  RO extends DefineAsyncFunctionComponentRenderOptions<PropsData> = DefineAsyncFunctionComponentRenderOptions<PropsData>
+>(renderOptions: RO, options: O): ExoticComponent<PropsData>;
+
+export function defineFunctionComponent<
+  Props = DefineFunctionComponentOptionsProps,
+  PropsData = DefineProps<LooseRequired<Props>, BooleanKey<Props>>,
+  O = DefineFunctionComponentOptions<PropsData>
+>(
+  render: DefineFunctionComponentRender<PropsData>,
+  options: O
+): ExoticComponent<PropsData>;
+
+export function defineFunctionComponent<
+  Props = DefineFunctionComponentOptionsProps,
+  PropsData = DefineProps<LooseRequired<Props>, BooleanKey<Props>>,
+  O = DefineFunctionComponentOptions<PropsData>
+>(
+  renderOptions: DefineAsyncFunctionComponentRenderOptions<PropsData>,
+  options: O
+): ExoticComponent<PropsData>;
+
 /**
  *
  * @example
  * ```tsx
- * const A = defineFunctionComponent(() => 1)
+ * const A = defineFunctionComponent<{a:number}>(() => 1)
  *
  * const B = defineFunctionComponent({
  *  loader(){
@@ -159,10 +263,10 @@ enum DefineFunctionComponentRenderType {
  *  error:({error}) => error
  * })
  *
- * const C = defineFunctionComponent((props,{attrs,slots,expose}) => props.msg,{
+ * const C = defineFunctionComponent((props) => props.msg,{
  *   name:"CustomName",
  *   props:{
- *    msg:{}
+ *    msg:{default:1,required:true,type:Number}
  *   }
  * })
  *
@@ -171,22 +275,17 @@ enum DefineFunctionComponentRenderType {
  * @param render - function or object
  * @returns vueRenderFunction
  */
-export function defineFunctionComponent(
-  render:
-    | DefineFunctionComponentRender
-    | DefineAsyncFunctionComponentRenderOptions,
-  options?: DefineFunctionComponentOptions
-) {
+export function defineFunctionComponent(render: any, options?: any): any {
   if (
     !isFunction(render) &&
     !isObject2(render) &&
     process.env.NODE_ENV !== "production"
   ) {
     warn(
-      "defineFunctionComponent: The first argument should be a render function or an object with a 'functionComponent' property. but Received:",
+      "The first argument should be a render function or an object with a 'functionComponent' property. but Received:",
       render
     );
-    return;
+    return void 0 as any;
   }
   const renderOptions = render as DefineAsyncFunctionComponentRenderOptions;
 
@@ -194,50 +293,60 @@ export function defineFunctionComponent(
   if (typeof render === "object") {
     if (!isFunction(render.loader) && process.env.NODE_ENV !== "production") {
       warn(
-        "defineFunctionComponent: The loader function must be a valid function. but Received:",
+        "The loader function must be a valid function. but Received:",
         render.loader
       );
-      return;
+      return void 0 as any;
     }
-    render = renderOptions.loader;
+    render = renderOptions.loader as any;
     renderFlag = DefineFunctionComponentRenderType.ASYNC_FUNCTION;
   }
 
-  if (render[__v_FC_component]) return render;
+  if ((render as any).$$typeof) return render as any;
 
   const componentOptions = (options ?? {
     props: (render as any).props,
     emits: (render as any).emits,
     slots: (render as any).slots,
-  }) as DefineFunctionComponentOptions;
+  }) as any;
 
   const componentFCName =
-    (componentOptions && componentOptions.name) || render.name;
+    (componentOptions && componentOptions.name) || (render as any).name;
 
-  const instanceRender = ref<DefineFunctionComponentRender | null>(render);
+  const instanceRender = ref<any>(render);
 
   let renderError: Error | string | void;
 
   const handlers = {
-    [componentFCName](
-      props: ComponentInternalInstance["props"],
-      context: SetupContext
-    ) {
-      let renderResult: any = null;
+    [componentFCName](props: any, context: SetupContext) {
+      let renderResult: any = null,
+        prevQueue,
+        memoizedEffect;
       const prevFunctionIntanceContext =
         currentInstanceContext as DefineFunctionComponentInstanceContext;
 
-      defineFunctionComponentContext();
-
-      console.log(currentInstanceContext);
-      const memoizedEffect = currentInstanceContext!.memoizedEffect;
-      if (memoizedEffect && memoizedEffect.queue) {
-        memoizedEffect.prevLast = memoizedEffect.last ?? null;
-        memoizedEffect.last = null;
+      if (renderFlag === DefineFunctionComponentRenderType.FUNCTION) {
+        defineFunctionComponentContext(props, context);
+        console.log(currentInstanceContext);
+        memoizedEffect = currentInstanceContext!.memoizedEffect;
+        if (memoizedEffect.queue) {
+          memoizedEffect.prevLast = memoizedEffect.last ?? null;
+          memoizedEffect.last = null;
+        }
+        prevQueue = memoizedEffect.queue;
+      } else {
+        currentInstanceContext = null;
       }
-      const prevQueue = memoizedEffect?.queue;
+      const ctx = currentInstanceContext;
       try {
         const renderFn = toValue(instanceRender);
+        const vnode = currentInstanceContext?.instance?.vnode;
+        if (vnode) {
+          const vnodeProps = vnode.props;
+          if (vnodeProps && hasOwn(vnodeProps, "ref")) {
+            props.ref = vnodeProps.ref;
+          }
+        }
         switch (renderFlag) {
           case DefineFunctionComponentRenderType.ERROR:
             if (renderOptions.error) {
@@ -247,7 +356,14 @@ export function defineFunctionComponent(
             }
             break;
           case DefineFunctionComponentRenderType.FUNCTION:
-            renderResult = renderFn!(props, context);
+            renderResult = renderFn!(props);
+            if (prevQueue !== null) {
+              if (memoizedEffect!.prevLast !== memoizedEffect!.last) {
+                throw new Error(
+                  "The hook for rendering is different from expected. This may be caused by an unexpected premature return statement."
+                );
+              }
+            }
             break;
           case DefineFunctionComponentRenderType.ASYNC_FUNCTION:
             const currentContext = currentInstanceContext;
@@ -296,34 +412,82 @@ export function defineFunctionComponent(
             }
             break;
         }
-        if (prevQueue !== null) {
-          if (memoizedEffect?.prevLast !== memoizedEffect?.last) {
-            throw new Error(
-              "The hook for rendering is different from expected. This may be caused by an unexpected premature return statement."
-            );
-          }
-        }
       } catch (err: any) {
+        renderFlag = DefineFunctionComponentRenderType.ERROR;
         if (process.env.NODE_ENV !== "production") {
-          warn("defineFunctionComponent render function error", err);
+          warn("defineFunctionComponent render", err);
         }
         renderResult = null;
       } finally {
+        if (renderFlag === DefineFunctionComponentRenderType.FUNCTION) {
+          ctx!.firstRenderFlag = 1;
+        }
         currentInstanceContext = prevFunctionIntanceContext || null;
       }
-
       return renderResult;
     },
   };
 
-  const handler = handlers[componentFCName] as DefineFunctionComponentRender;
+  const handler = handlers[componentFCName] as any;
 
-  handler[__v_FC_component] = true;
+  handler.$$typeof = __v_FC_component;
 
   Object.assign(handler, {
     props: componentOptions.props,
     emits: componentOptions.emits,
     slots: componentOptions.slots,
   });
-  return handler;
+  return handler as any;
+}
+
+export type VueFunctionComponentVnode =
+  | VNode
+  | VNode[]
+  | null
+  | void
+  | string
+  | number
+  | boolean
+  | (Element & any);
+
+type Slot = (...args: any[]) => VueFunctionComponentVnode;
+
+export function defineFunctionSlots(slot: VueFunctionComponentVnode): {
+  default: Slot;
+};
+export function defineFunctionSlots(slot: Slot): { default: Slot };
+export function defineFunctionSlots(...args: Slot[]): Slots;
+
+export function defineFunctionSlots(...slots: any): any {
+  const slots2: any = {};
+  for (let slot of slots) {
+    if (isVNode(slot)) {
+      slots2.default = () => slot;
+    } else if (isFunction(slot)) {
+      slots2[slot.name || "default"] = slot;
+    } else if (isObject2(slot)) {
+      extend(slots2, slot);
+    } else {
+      slots2.default = () => slot;
+    }
+  }
+  return slots2;
+}
+
+function useContext(): SetupContext {
+  return getCurrentFunctionComponentInstance()?.context as any;
+}
+
+export const useSetupContext = useContext;
+
+export function useSlots(): SetupContext["slots"] {
+  return useContext()?.slots;
+}
+
+export function useAttrs(): SetupContext["attrs"] {
+  return useContext()?.attrs;
+}
+
+export function useProps(): DefineFunctionComponentInstanceContext["props"] {
+  return getCurrentFunctionComponentInstance()?.props;
 }

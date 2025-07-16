@@ -1,16 +1,11 @@
 import { warn } from "vue";
-import { hasChanged, isFunction } from "../../shared";
+import { EMPTY_OBJ, hasChanged, isFunction } from "../../shared";
 import {
   type DefineFunctionComponentInstanceContext,
   getCurrentFunctionComponentInstance,
 } from "../defineFunctionComponent";
 import { EffectFlagName, EffectQueueFlag } from "./hookFlag";
-import {
-  scheduleTask,
-  Priority,
-  cancelDuplicateTask,
-  getCurrentPriorityLane,
-} from "../scheduler";
+import { scheduleTask, Priority, cancelDuplicateTask } from "../scheduler";
 
 // === 类型定义===
 export type AnyActionArg = any[];
@@ -18,6 +13,7 @@ export type ActionDispatch<A extends AnyActionArg> = (...args: A) => void;
 export type SetStateAction<T> = T | ((prevState: T) => T);
 export type Dispatch<T> = (value: T) => void;
 export type EffectCallback = () => void | (() => void);
+export type StartTransition = (callback: () => any) => any;
 
 type MakePropertiesOptional<T, K extends keyof T> = Partial<Pick<T, K>> &
   Omit<T, K>;
@@ -39,29 +35,42 @@ export interface EffectQueue<T = any> {
   hooks?: EffectHooks;
   lane: number; // 优先级通道
   isConcurrent?: boolean;
-  baseState?: T;
   memoizedState?: T;
   queue?: EffectQueue[];
+  type: 1 | 2;
 }
 
 /**
  * 生成 Hook 调用顺序错误提示
  */
-function generateHookOrderError(
-  expectedFlag: EffectQueueFlag,
-  actualFlag?: EffectQueueFlag
-) {
-  const expectedHook = EffectFlagName[expectedFlag] || `Hook(${expectedFlag})`;
-  const actualHook = actualFlag
-    ? EffectFlagName[actualFlag] || `Hook(${actualFlag})`
-    : "null";
+function generateHookOrderError(flag: EffectQueueFlag) {
+  const ctx = getCurrentContext();
+  const { memoizedEffect } = ctx!;
+  let effect = memoizedEffect.queue;
+  const current = memoizedEffect.last?.next! ?? null;
+  const l: (EffectQueue | null)[] = [];
+  while (effect && effect !== current) {
+    if (effect.type === 1) l.push(effect);
+    effect = effect.next as EffectQueue;
+  }
+  l.push(current);
+  const c = ["Previous render", 12];
+  const error = `The order of Hooks called by the app has changed when rendering. If not fixed, it will cause bugs and errors.
 
-  return [
-    `Invalid Hook call order:`,
-    `- Expected: ${expectedHook}`,
-    `- Actual: ${actualHook}`,
-    `Hooks must be called in the same order on every render.`,
-  ].join("\n");
+   ${c[0]}${" ".repeat(c[1] as number)}Next render
+   ------------------------------------------------------
+${l
+  .map((a, b) => {
+    const name = a ? (EffectFlagName as any)[a.flag] : a + "";
+    const n = (c[0] as string).length - name.length;
+    return `${b + 1}. ${name}${" ".repeat((c[1] as number) + n)}${
+      a === current ? (EffectFlagName as any)[flag] : name
+    }`;
+  })
+  .join("\n")}
+   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ Error Component Stack`;
+  return error;
 }
 
 /**
@@ -72,10 +81,11 @@ function areDepsChanged(
   lastDeps: unknown[] | void | null
 ): boolean {
   if (newDeps == null || lastDeps == null) return true;
+  if (newDeps === lastDeps) return false;
   if (newDeps.length !== lastDeps.length) return true;
 
   for (let i = 0; i < newDeps.length; i++) {
-    if (!Object.is(newDeps[i], lastDeps[i])) return true;
+    if (hasChanged(newDeps[i], lastDeps[i])) return true;
   }
   return false;
 }
@@ -83,22 +93,19 @@ function areDepsChanged(
 /**
  * 获取当前组件上下文
  */
-function getCurrentContext(): DefineFunctionComponentInstanceContext | null {
+function getCurrentContext(): DefineFunctionComponentInstanceContext {
   const ctx = getCurrentFunctionComponentInstance();
   if (!ctx && process.env.NODE_ENV !== "production") {
     warn("Hooks can only be called inside function components.");
   }
-  return ctx ?? null;
+  return ctx as DefineFunctionComponentInstanceContext;
 }
 
-/**
- * 初始化或复用 Hook 队列
- */
 function initOrReuseHookQueue<T>(
   queueFlag: EffectQueueFlag,
   create: (
     ctx: DefineFunctionComponentInstanceContext
-  ) => MakePropertiesOptional<EffectQueue<T>, "flag">,
+  ) => MakePropertiesOptional<EffectQueue<T>, "flag" | "lane">,
   lane: number = Priority.NORMAL
 ): EffectQueue<T> {
   const ctx = getCurrentContext();
@@ -106,6 +113,21 @@ function initOrReuseHookQueue<T>(
 
   const { memoizedEffect } = ctx;
   let effect = memoizedEffect.queue;
+
+  const per = () => {
+    const errorString = generateHookOrderError(queueFlag);
+    memoizedEffect.last = memoizedEffect.prevLast = memoizedEffect.queue = null;
+    return errorString;
+  };
+
+  // 检查 Hook 调用顺序
+  if (
+    ctx.instance?.isMounted &&
+    ctx.firstRenderFlag === 1 &&
+    memoizedEffect.last === memoizedEffect.prevLast
+  ) {
+    throw new Error(per());
+  }
 
   // 初始化队列
   if (!effect) {
@@ -117,11 +139,6 @@ function initOrReuseHookQueue<T>(
     return effect;
   }
 
-  // 检查 Hook 调用顺序
-  if (memoizedEffect.last === memoizedEffect.prevLast) {
-    throw new Error(generateHookOrderError(queueFlag));
-  }
-
   // 查找或创建下一个 Hook
   if (memoizedEffect.last) {
     let next = memoizedEffect.last.next as EffectQueue<T>;
@@ -130,17 +147,16 @@ function initOrReuseHookQueue<T>(
       next.lane = lane;
       next.flag = queueFlag;
     } else if ((next.flag & queueFlag) !== queueFlag) {
-      memoizedEffect.last = memoizedEffect.prevLast ?? null;
-      throw new Error(generateHookOrderError(queueFlag, next.flag));
+      throw new Error(per());
     }
     memoizedEffect.last = next;
     return next;
   }
 
   if ((effect.flag & queueFlag) !== queueFlag) {
-    memoizedEffect.last = memoizedEffect.prevLast ?? null;
-    throw new Error(generateHookOrderError(queueFlag, effect.flag));
+    throw new Error(per());
   }
+
   memoizedEffect.last = effect;
   return effect;
 }
@@ -151,29 +167,19 @@ function createConcurrentDispatch<T>(
   ctx: DefineFunctionComponentInstanceContext,
   lane: number = Priority.NORMAL
 ): Dispatch<SetStateAction<T>> {
+  const update = () => {
+    ctx.hooks.update();
+  };
   return (value) => {
     const prevValue = effectQueue.action;
     const newValue = isFunction(value) ? value(prevValue as T) : value;
 
     if (hasChanged(prevValue, newValue)) {
-      const currentPriority = getCurrentPriorityLane();
-
-      if (lane === Priority.TRANSITION && currentPriority < lane) {
-        cancelDuplicateTask(() => {
-          effectQueue.action = newValue;
-          effectQueue.baseState = prevValue;
-          ctx.hooks.update();
-        }, lane);
-        return;
-      }
+      cancelDuplicateTask(update, lane);
 
       effectQueue.action = newValue;
-      effectQueue.baseState = prevValue;
 
-      scheduleTask(
-        () => ctx.hooks.update(),
-        lane === Priority.SYNC ? Priority.SYNC : Priority.NORMAL
-      );
+      scheduleTask(update, lane);
     }
   };
 }
@@ -182,7 +188,9 @@ function useEffectImpl(
   create: EffectCallback,
   deps: any[] | undefined | null,
   flag: EffectQueueFlag,
-  lane: number
+  lane: number,
+  type: EffectQueue["type"] = 1,
+  scheduler: (fn: () => any, lane: number) => any = scheduleTask
 ) {
   const effectQueue = initOrReuseHookQueue(
     flag,
@@ -190,7 +198,8 @@ function useEffectImpl(
       create,
       deps: void 0,
       lane,
-      hooks: { destroy: undefined },
+      hooks: { destroy: void 0 },
+      type,
     }),
     lane
   );
@@ -200,7 +209,7 @@ function useEffectImpl(
     effectQueue.create = create;
     effectQueue.deps = deps;
 
-    scheduleTask(() => {
+    scheduler(() => {
       effectQueue.hooks!.destroy = create() as () => void;
     }, lane);
   }
@@ -217,8 +226,7 @@ export const dispatcher = {
       EffectQueueFlag.USE_STATE,
       () => ({
         action: isFunction(initialState) ? initialState() : initialState,
-        lane: Priority.NORMAL,
-        baseState: isFunction(initialState) ? initialState() : initialState,
+        type: 1,
       }),
       Priority.NORMAL
     );
@@ -246,7 +254,7 @@ export const dispatcher = {
       () => ({
         memoizedState: create(),
         deps,
-        lane: Priority.NORMAL,
+        type: 1,
       }),
       Priority.NORMAL
     );
@@ -269,7 +277,7 @@ export const dispatcher = {
       () => ({
         memoizedState: callback,
         deps,
-        lane: Priority.NORMAL,
+        type: 1,
       }),
       Priority.NORMAL
     );
@@ -297,8 +305,7 @@ export const dispatcher = {
           : (initialArg as unknown as S);
         return {
           action: initialState,
-          memoizedState: initialState,
-          lane: Priority.NORMAL,
+          type: 1,
         };
       },
       Priority.NORMAL
@@ -309,7 +316,6 @@ export const dispatcher = {
         const newState = reducer(effectQueue.action as S, ...action);
         if (!Object.is(effectQueue.action, newState)) {
           effectQueue.action = newState;
-          effectQueue.memoizedState = newState;
           ctx!.hooks.update();
         }
       }) as any;
@@ -326,8 +332,22 @@ export const dispatcher = {
     const effectQueue = initOrReuseHookQueue(
       EffectQueueFlag.USE_REF,
       () => ({
-        memoizedState: { current: initialValue },
-        lane: Priority.NORMAL,
+        memoizedState: {
+          current: initialValue,
+          get i() {
+            return (
+              (effectQueue as any).a ||
+              ((effectQueue as any).a = {
+                refs: effectQueue.memoizedState,
+                setupState: EMPTY_OBJ,
+              })
+            );
+          },
+          get r() {
+            return "current";
+          },
+        },
+        type: 1,
       }),
       Priority.NORMAL
     );
@@ -341,7 +361,8 @@ export const dispatcher = {
       create,
       deps,
       EffectQueueFlag.USE_LAYOUT_EFFECT,
-      Priority.USER_INPUT
+      Priority.USER_INPUT,
+      1
     );
   },
 
@@ -350,6 +371,7 @@ export const dispatcher = {
     scheduleTask(callback, Priority.TRANSITION);
   },
 
+  // === useDeferredValue ===
   useDeferredValue<T>(value: T): T {
     const [deferredValue, setDeferredValue] = this.useState<T>(value);
 
@@ -357,7 +379,7 @@ export const dispatcher = {
       EffectQueueFlag.USE_DEFERRED_VALUE,
       () => ({
         action: value,
-        lane: Priority.TRANSITION,
+        type: 1,
       }),
       Priority.TRANSITION
     );
@@ -379,8 +401,8 @@ export const dispatcher = {
       (ctx) => {
         ctx.uid++;
         return {
-          action: `:r${ctx.uid || Math.round(Math.random() * 1e6)}:`,
-          lane: Priority.SYNC,
+          action: `:v${ctx.uid || Math.round(Math.random() * 1e6)}:`,
+          type: 1,
         };
       },
       Priority.SYNC
@@ -402,7 +424,7 @@ export const dispatcher = {
       () => ({
         create: subscribe as any,
         action: getSnapshot(),
-        lane: Priority.NORMAL,
+        type: 1,
       }),
       Priority.NORMAL
     );
@@ -426,27 +448,106 @@ export const dispatcher = {
       },
       [subscribe],
       EffectQueueFlag.USE_EFFECT,
-      Priority.SYNC
+      Priority.SYNC,
+      2
     );
 
-    const nextSnapshot = getSnapshot();
+    const snapshot = getSnapshot();
     if (
       !didWarnUncachedGetSnapshot &&
-      hasChanged(effectQueue.action, nextSnapshot)
+      hasChanged(effectQueue.action, snapshot)
     ) {
-      warn(
-        "The result of getSnapshot should be cached to avoid an infinite loop"
-      );
-      didWarnUncachedGetSnapshot = true;
+      const nextSnapshot = getSnapshot();
+      if (hasChanged(snapshot, nextSnapshot)) {
+        didWarnUncachedGetSnapshot = true;
+        warn(
+          "The result of getSnapshot should be cached to avoid an infinite loop"
+        );
+      }
     }
 
     if (didWarnUncachedGetSnapshot) {
       didWarnUncachedGetSnapshot = false;
-      effectQueue.action = nextSnapshot;
+      effectQueue.action = snapshot;
       scheduleTask(() => ctx?.hooks.update(), Priority.SYNC);
     }
 
     return effectQueue.action as T;
+  },
+
+  // === useImperativeHandle ===
+  useImperativeHandle(
+    ref: { current: any },
+    createHandle: () => any,
+    dependencies?: DependencyList
+  ) {
+    if (ref == null) {
+      throw new Error(
+        "The ref parameter of the useImperativeHandle hook cannot be empty and must be created through useRef"
+      );
+    }
+    const effectQueue = initOrReuseHookQueue(
+      EffectQueueFlag.USE_IMPERATIVE_HANDLE,
+      () => ({
+        create: createHandle as any,
+        action: void 0,
+        type: 1,
+      }),
+      Priority.NORMAL
+    );
+
+    useEffectImpl(
+      () => {
+        const result = createHandle();
+        effectQueue.action = result;
+      },
+      dependencies,
+      EffectQueueFlag.USE_EFFECT,
+      Priority.NORMAL,
+      2
+    );
+
+    useEffectImpl(
+      () => {
+        ref.current = effectQueue.action;
+        return () => {
+          ref.current = void 0;
+        };
+      },
+      [ref, ref.current],
+      EffectQueueFlag.USE_EFFECT,
+      Priority.NORMAL,
+      2
+    );
+  },
+
+  // === useTransition ===
+  useTransition(): [boolean, StartTransition] {
+    const effectQueue = initOrReuseHookQueue(
+      EffectQueueFlag.USE_TRANSITION,
+      (ctx) => ({
+        action: false,
+        type: 1,
+        dispatch: function (callback: () => void) {
+          effectQueue.action = true;
+          ctx.hooks.update();
+          scheduleTask(() => {
+            try {
+              callback();
+            } finally {
+              effectQueue.action = false;
+              ctx.hooks.update();
+            }
+          }, Priority.TRANSITION);
+        } as any,
+      }),
+      Priority.NORMAL
+    );
+
+    return [
+      effectQueue.action as boolean,
+      effectQueue.dispatch as StartTransition,
+    ];
   },
 };
 
