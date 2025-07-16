@@ -1,3 +1,4 @@
+import { type Context } from "../createContext";
 import dispatcher, {
   type EffectCallback,
   type Dispatch,
@@ -119,4 +120,9 @@ export function useImperativeHandle(
 
 export function useTransition() {
   return dispatcher.useTransition();
+}
+
+export function useContext<T>(context: Context<T>): T;
+export function useContext<T>(context: Context<T>) {
+  return dispatcher.useContext(context);
 }

@@ -12,7 +12,7 @@ import {
   isVNode,
   type ComponentObjectPropsOptions,
   type ExtractPropTypes,
-  DefineProps,
+  type DefineProps,
 } from "vue";
 import { extend, hasOwn, isFunction, isObject2 } from "../shared";
 import { onUnmounted } from "./lifeCycle";
@@ -77,6 +77,7 @@ export interface DefineFunctionComponentInstanceContext {
   hooks: DefineFunctionComponentInstanceContextHooks;
   uid: number;
   firstRenderFlag: 0 | 1;
+  provides: Map<any, any>;
 }
 
 interface DefineFunctionComponentInstanceContextHooks {
@@ -94,6 +95,12 @@ let currentInstanceContext: DefineFunctionComponentInstanceContext | null =
 
 export function getCurrentFunctionComponentInstance(): DefineFunctionComponentInstanceContext {
   return currentInstanceContext as DefineFunctionComponentInstanceContext;
+}
+
+export function setCurrentFunctionComponentInstance(
+  context: DefineFunctionComponentInstanceContext | null
+) {
+  currentInstanceContext = context ?? null;
 }
 
 function createInstanceMemoized(): DefineFunctionComponentInstanceContext["memoizedEffect"] {
@@ -126,28 +133,12 @@ function defineFunctionComponentContext(
         parent: null,
         instance: instance,
         hooks: {
-          update: () => {
-            const e = context.instance?.effect;
-            if (e) {
-              e.dirty = true;
-              if (e.scheduler) {
-                e.scheduler();
-              } else {
-                scheduleTask(
-                  () => context.instance?.update(),
-                  Priority.TRANSITION
-                );
-              }
-            } else {
-              if (process.env.NODE_ENV !== "production") {
-                warn("The current instance has no updatable scheduling");
-              }
-            }
-          },
+          update: createCurrentContextUpdateHook(),
         },
         memoizedEffect: createInstanceMemoized(),
         uid: 0,
         firstRenderFlag: 0,
+        provides: new Map(),
       } as any)
     );
     currentInstanceContext = context;
@@ -161,12 +152,32 @@ function defineFunctionComponentContext(
       }
       instance.uid = 0;
       functionComponentIntanceMap.delete(instance);
+      context.provides.clear();
     });
   }
   context.parent = functionComponentIntanceMap.get(instance.parent!) ?? null;
   currentInstanceContext = context;
   currentInstanceContext.context = setupContext as any;
   currentInstanceContext.props = props as any;
+}
+
+function createCurrentContextUpdateHook() {
+  const instance = getCurrentInstance();
+  return () => {
+    const e = instance?.effect;
+    if (e) {
+      e.dirty = true;
+      if (e.scheduler) {
+        e.scheduler();
+      } else {
+        scheduleTask(() => instance?.update(), Priority.TRANSITION);
+      }
+    } else {
+      if (process.env.NODE_ENV !== "production") {
+        warn("The current instance has no updatable scheduling");
+      }
+    }
+  };
 }
 
 enum DefineFunctionComponentRenderType {
@@ -177,7 +188,9 @@ enum DefineFunctionComponentRenderType {
 }
 
 export interface ExoticComponent<P = {}> {
-  (props: P): VueFunctionComponentVnode;
+  (
+    props: P & { children?: VueFunctionComponentVnode }
+  ): VueFunctionComponentVnode;
   readonly $$typeof: symbol;
 }
 
@@ -277,9 +290,9 @@ export function defineFunctionComponent<
  */
 export function defineFunctionComponent(render: any, options?: any): any {
   if (
+    process.env.NODE_ENV !== "production" &&
     !isFunction(render) &&
-    !isObject2(render) &&
-    process.env.NODE_ENV !== "production"
+    !isObject2(render)
   ) {
     warn(
       "The first argument should be a render function or an object with a 'functionComponent' property. but Received:",
@@ -291,7 +304,7 @@ export function defineFunctionComponent(render: any, options?: any): any {
 
   let renderFlag = DefineFunctionComponentRenderType.FUNCTION;
   if (typeof render === "object") {
-    if (!isFunction(render.loader) && process.env.NODE_ENV !== "production") {
+    if (process.env.NODE_ENV !== "production" && !isFunction(render.loader)) {
       warn(
         "The loader function must be a valid function. but Received:",
         render.loader
@@ -357,7 +370,7 @@ export function defineFunctionComponent(render: any, options?: any): any {
             break;
           case DefineFunctionComponentRenderType.FUNCTION:
             renderResult = renderFn!(props);
-            if (prevQueue !== null) {
+            if (process.env.NODE_ENV !== "production" && prevQueue !== null) {
               if (memoizedEffect!.prevLast !== memoizedEffect!.last) {
                 throw new Error(
                   "The hook for rendering is different from expected. This may be caused by an unexpected premature return statement."
@@ -370,23 +383,29 @@ export function defineFunctionComponent(render: any, options?: any): any {
             const promiseRes = Promise.resolve((renderFn as any)());
             renderFlag = DefineFunctionComponentRenderType.LOADING;
             promiseRes
-              .then((render: DefineFunctionComponentRender) => {
+              .then((comp: any) => {
                 if (currentContext?.instance?.isUnmounted) {
                   instanceRender.value = null;
                   return;
                 }
-                if (!isFunction(render)) {
+                if (
+                  comp &&
+                  (comp.__esModule || comp[Symbol.toStringTag] === "Module")
+                ) {
+                  comp = comp.default;
+                }
+                if (!isFunction(comp)) {
                   if (process.env.NODE_ENV !== "production") {
                     warn(
-                      "defineFunctionComponent(asyncComponent): The promise reslove must return a valid render function. but received:",
-                      render
+                      "function.component(asyncComponent): The promise reslove must return a valid render function. but received:",
+                      comp
                     );
                   }
                   instanceRender.value = null;
                   throw new Error();
                 }
                 renderFlag = DefineFunctionComponentRenderType.FUNCTION;
-                instanceRender.value = render;
+                instanceRender.value = comp;
               })
               .catch((err: any) => {
                 renderError = err;
@@ -397,7 +416,7 @@ export function defineFunctionComponent(render: any, options?: any): any {
                   process.env.NODE_ENV !== "production"
                 ) {
                   warn(
-                    "defineFunctionComponent(asyncComponent) render function error",
+                    "function.component(asyncComponent) error",
                     err.toString()
                   );
                 }
@@ -415,7 +434,7 @@ export function defineFunctionComponent(render: any, options?: any): any {
       } catch (err: any) {
         renderFlag = DefineFunctionComponentRenderType.ERROR;
         if (process.env.NODE_ENV !== "production") {
-          warn("defineFunctionComponent render", err);
+          warn("function.component render", err);
         }
         renderResult = null;
       } finally {
@@ -490,4 +509,66 @@ export function useAttrs(): SetupContext["attrs"] {
 
 export function useProps(): DefineFunctionComponentInstanceContext["props"] {
   return getCurrentFunctionComponentInstance()?.props;
+}
+
+export function provide<T, K = any>(key: K, value: T): void;
+export function provide(key: any, value: any) {
+  if (!currentInstanceContext) {
+    if (true) {
+      warn(`provide() can only be called inside function components.`);
+    }
+  } else {
+    let provides = currentInstanceContext.provides;
+    const parentProvides =
+      currentInstanceContext.parent && currentInstanceContext.parent.provides;
+    if (parentProvides === provides) {
+      provides = currentInstanceContext.provides = new Map(parentProvides);
+    }
+    provides.set(key, value);
+  }
+}
+
+export function inject<T>(key: any): T | undefined;
+export function inject<T>(
+  key: any,
+  defaultValue: T,
+  treatDefaultAsFactory?: false
+): T;
+export function inject<T>(
+  key: any,
+  defaultValue: T | (() => T),
+  treatDefaultAsFactory: true
+): T;
+export function inject(
+  key: any,
+  defaultValue?: any,
+  treatDefaultAsFactory = false
+) {
+  const instanceContext = currentInstanceContext;
+  if (instanceContext) {
+    let provides: any = null;
+    let source: any = instanceContext;
+    while (source) {
+      let _provides = provides;
+      if ((_provides = source.provides) && _provides.has(key)) {
+        provides = _provides;
+        break;
+      }
+      source = source.parent;
+      if (!source && !provides) {
+        source = instanceContext.instance.vnode.appContext;
+      }
+    }
+    if (provides) {
+      return provides.get(key);
+    } else if (arguments.length > 1) {
+      return treatDefaultAsFactory && isFunction(defaultValue)
+        ? defaultValue.call(instanceContext && instanceContext.instance.props)
+        : defaultValue;
+    } else if (process.env.NODE_ENV !== "production") {
+      warn(`injection key( `, key, ` ) not found.`);
+    }
+  } else if (process.env.NODE_ENV !== "production") {
+    warn(`inject() can only be called inside function components.`);
+  }
 }

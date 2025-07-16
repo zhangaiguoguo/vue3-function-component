@@ -1,8 +1,9 @@
 import { warn } from "vue";
-import { EMPTY_OBJ, hasChanged, isFunction } from "../../shared";
+import { EMPTY_OBJ, hasChanged, isFunction, NOOP, NOOP2 } from "../../shared";
 import {
   type DefineFunctionComponentInstanceContext,
   getCurrentFunctionComponentInstance,
+  inject,
 } from "../defineFunctionComponent";
 import { EffectFlagName, EffectQueueFlag } from "./hookFlag";
 import { scheduleTask, Priority, cancelDuplicateTask } from "../scheduler";
@@ -43,19 +44,21 @@ export interface EffectQueue<T = any> {
 /**
  * 生成 Hook 调用顺序错误提示
  */
-function generateHookOrderError(flag: EffectQueueFlag) {
-  const ctx = getCurrentContext();
-  const { memoizedEffect } = ctx!;
-  let effect = memoizedEffect.queue;
-  const current = memoizedEffect.last?.next! ?? null;
-  const l: (EffectQueue | null)[] = [];
-  while (effect && effect !== current) {
-    if (effect.type === 1) l.push(effect);
-    effect = effect.next as EffectQueue;
-  }
-  l.push(current);
-  const c = ["Previous render", 12];
-  const error = `The order of Hooks called by the app has changed when rendering. If not fixed, it will cause bugs and errors.
+const generateHookOrderError =
+  process.env.NODE_ENV !== "production"
+    ? function (flag: EffectQueueFlag) {
+        const ctx = getCurrentContext();
+        const { memoizedEffect } = ctx!;
+        let effect = memoizedEffect.queue;
+        const current = memoizedEffect.last?.next! ?? null;
+        const l: (EffectQueue | null)[] = [];
+        while (effect && effect !== current) {
+          if (effect.type === 1) l.push(effect);
+          effect = effect.next as EffectQueue;
+        }
+        l.push(current);
+        const c = ["Previous render", 12];
+        const error = `The order of Hooks called by the app has changed when rendering. If not fixed, it will cause bugs and errors.
 
    ${c[0]}${" ".repeat(c[1] as number)}Next render
    ------------------------------------------------------
@@ -70,8 +73,9 @@ ${l
   .join("\n")}
    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
  Error Component Stack`;
-  return error;
-}
+        return error;
+      }
+    : NOOP2;
 
 /**
  * 依赖项比较
@@ -114,19 +118,26 @@ function initOrReuseHookQueue<T>(
   const { memoizedEffect } = ctx;
   let effect = memoizedEffect.queue;
 
-  const per = () => {
-    const errorString = generateHookOrderError(queueFlag);
-    memoizedEffect.last = memoizedEffect.prevLast = memoizedEffect.queue = null;
-    return errorString;
-  };
+  const per =
+    process.env.NODE_ENV !== "production"
+      ? () => {
+          const errorString = generateHookOrderError(queueFlag);
+          memoizedEffect.last =
+            memoizedEffect.prevLast =
+            memoizedEffect.queue =
+              null;
+          return errorString;
+        }
+      : NOOP;
 
   // 检查 Hook 调用顺序
   if (
+    process.env.NODE_ENV !== "production" &&
     ctx.instance?.isMounted &&
     ctx.firstRenderFlag === 1 &&
     memoizedEffect.last === memoizedEffect.prevLast
   ) {
-    throw new Error(per());
+    throw new Error(per() as any);
   }
 
   // 初始化队列
@@ -146,15 +157,21 @@ function initOrReuseHookQueue<T>(
       next = memoizedEffect.last.next = create(ctx) as EffectQueue<T>;
       next.lane = lane;
       next.flag = queueFlag;
-    } else if ((next.flag & queueFlag) !== queueFlag) {
-      throw new Error(per());
+    } else if (
+      process.env.NODE_ENV !== "production" &&
+      (next.flag & queueFlag) !== queueFlag
+    ) {
+      throw new Error(per() as any);
     }
     memoizedEffect.last = next;
     return next;
   }
 
-  if ((effect.flag & queueFlag) !== queueFlag) {
-    throw new Error(per());
+  if (
+    process.env.NODE_ENV !== "production" &&
+    (effect.flag & queueFlag) !== queueFlag
+  ) {
+    throw new Error(per() as any);
   }
 
   memoizedEffect.last = effect;
@@ -184,7 +201,7 @@ function createConcurrentDispatch<T>(
   };
 }
 
-function useEffectImpl(
+export function useEffectImpl(
   create: EffectCallback,
   deps: any[] | undefined | null,
   flag: EffectQueueFlag,
@@ -220,7 +237,7 @@ export const dispatcher = {
   // === useState ===
   useState<T>(initialState: T | (() => T)): [T, Dispatch<SetStateAction<T>>] {
     const ctx = getCurrentContext();
-    if (!ctx) return [initialState as T, () => {}];
+    if (!ctx) return void 0 as any;
 
     const effectQueue = initOrReuseHookQueue(
       EffectQueueFlag.USE_STATE,
@@ -548,6 +565,52 @@ export const dispatcher = {
       effectQueue.action as boolean,
       effectQueue.dispatch as StartTransition,
     ];
+  },
+  // === useContext ===
+  useContext(context: any) {
+    const ctx = getCurrentFunctionComponentInstance();
+    const effectQueue = initOrReuseHookQueue(
+      EffectQueueFlag.USE_CONTEXT,
+      () => ({
+        action: context,
+        type: 1,
+      }),
+      Priority.NORMAL
+    );
+
+    useEffectImpl(
+      () => {
+        let injectResult;
+        const currentRenderValue = (context as any)._currentRenderer;
+        if (currentRenderValue) {
+          effectQueue.memoizedState = currentRenderValue.value;
+        } else if ((injectResult = inject<any>(context, NOOP, true))) {
+          if (injectResult) {
+            effectQueue.memoizedState = injectResult.value;
+            ctx.provides.set(context, injectResult);
+          }
+        } else {
+          effectQueue.memoizedState = context._currentValue;
+        }
+        effectQueue.action = context;
+      },
+      [context, (context as any)._renderCount],
+      EffectQueueFlag.USE_EFFECT,
+      Priority.SYNC
+    );
+
+    useEffectImpl(
+      () => {
+        return () => {
+          ctx.provides.delete(context);
+        };
+      },
+      [context],
+      EffectQueueFlag.USE_EFFECT,
+      Priority.SYNC
+    );
+
+    return effectQueue.memoizedState;
   },
 };
 

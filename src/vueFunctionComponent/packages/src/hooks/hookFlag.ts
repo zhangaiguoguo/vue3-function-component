@@ -11,7 +11,8 @@ export enum EffectQueueFlag {
   USE_ID = 0b00000100000000,
   USE_DEFERRED_VALUE = 0b00001000000000,
   USE_SYNC_EXTERNAL_STORE = 0b00010000000000,
-  USE_IMPERATIVE_HANDLE = 0b00100000000000
+  USE_IMPERATIVE_HANDLE = 0b00100000000000,
+  USE_CONTEXT = 0b01000000000000,
 }
 
 // Hook 名称映射（用于错误提示）
@@ -28,6 +29,7 @@ export const EffectFlagName = {
   [EffectQueueFlag.USE_DEFERRED_VALUE]: "useDeferredValue",
   [EffectQueueFlag.USE_SYNC_EXTERNAL_STORE]: "useSyncExternalStore",
   [EffectQueueFlag.USE_IMPERATIVE_HANDLE]: "useImperativeHandle",
+  [EffectQueueFlag.USE_CONTEXT]: "useContext",
 };
 
 export function isEffectFlag(flag: number): flag is EffectQueueFlag {

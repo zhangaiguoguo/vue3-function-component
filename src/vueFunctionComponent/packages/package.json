@@ -1,0 +1,54 @@
+{
+  "name": "vue-function-component",
+  "version": "1.0.0",
+  "description": "Vue3 function component is similar to React function component in implementing memory state hooks",
+  "main": "main.ts",
+  "module": "dist/vueFunctionComponent.esm.js",
+  "types": "types/index.d.ts",
+  "unpkg": "dist/vueFunctionComponent.global.prod.js",
+  "jsdelivr": "dist/vueFunctionComponent.global.prod.js",
+  "files": [
+    "dist",
+    "types",
+    "index.js"
+  ],
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "node": {
+        "production": "./dist/vueFunctionComponent.cjs.js",
+        "development": "./dist/vueFunctionComponent.cjs.js",
+        "default": "./index.js"
+      },
+      "module": "./dist/vueFunctionComponent.esm.js",
+      "import": "./dist/vueFunctionComponent.esm.js",
+      "require": "./dist/vueFunctionComponent.cjs.js"
+    },
+    "./*": "./*"
+  },
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhangaiguoguo/vue3-function-component.git"
+  },
+  "buildOptions": {
+    "name": "vue2use",
+    "formats": [
+      "esm",
+      "cjs",
+      "global"
+    ]
+  },
+  "keywords": [
+    "vue",
+    "vue3 component",
+    "vue3 function component",
+    "vue3Hooks"
+  ],
+  "author": "zhangag",
+  "license": "MIT",
+  "bugs": {},
+  "devDependencies": {
+    "vue": "^3.5.9"
+  }
+}

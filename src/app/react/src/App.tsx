@@ -1,9 +1,9 @@
-import { useState, createContext, useContext } from "react";
+import { useState, createContext, useContext, memo } from "react";
 import "./App.css";
 
-const C = createContext(1);
+const C = createContext(12222);
 console.log(C);
-console.log(createContext)
+console.log(createContext);
 
 function App() {
   const [count, setCount] = useState(0);
@@ -15,12 +15,9 @@ function App() {
           count is {count}
         </button>
         <C.Provider value={2 + count}>
-          <C.Provider value={3 + count}>
-            <C.Consumer>{Cc}</C.Consumer>
-            <B></B>
-          </C.Provider>
-          <B></B>
+          <C.Consumer>{Cc}</C.Consumer>
         </C.Provider>
+        <B></B>
       </div>
     </>
   );
@@ -31,11 +28,12 @@ function B() {
   return <h1>b - {value}</h1>;
 }
 
+console.log(memo(() => 1))
+
 function Cc(value) {
   return (
     <>
       <h1>Cc - {value}</h1>
-      <B />
     </>
   );
 }
