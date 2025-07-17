@@ -13,8 +13,9 @@ import {
   type ComponentObjectPropsOptions,
   type ExtractPropTypes,
   type DefineProps,
+  triggerRef,
 } from "vue";
-import { extend, hasOwn, isFunction, isObject2 } from "../shared";
+import { extend, isFunction, isObject2 } from "../shared";
 import { onUnmounted } from "./lifeCycle";
 import { type EffectQueue } from "./hooks/dispatcher";
 import { Priority, scheduleTask } from "./scheduler";
@@ -35,7 +36,7 @@ export type AsyncComponentLoader<T = any> = () => Promise<
 >;
 
 type DefineAsyncFunctionComponentErrorRenderProps = {
-  error?: Error | string | void;
+  error: Error | string | void;
 };
 
 interface DefineAsyncFunctionComponentRenderOptions<
@@ -45,7 +46,7 @@ interface DefineAsyncFunctionComponentRenderOptions<
   error?:
     | ExoticComponent<DefineAsyncFunctionComponentErrorRenderProps>
     | ((
-        props: DefineAsyncFunctionComponentErrorRenderProps
+        props: DefineAsyncFunctionComponentErrorRenderProps & VnodeJsxProps
       ) => VueFunctionComponentVnode);
   loading?: ExoticComponent | (() => VueFunctionComponentVnode);
 }
@@ -187,10 +188,12 @@ enum DefineFunctionComponentRenderType {
   ASYNC_FUNCTION = "asyncFunction",
 }
 
+interface VnodeJsxProps {
+  children?: VueFunctionComponentVnode;
+}
+
 export interface ExoticComponent<P = {}> {
-  (
-    props: P & { children?: VueFunctionComponentVnode }
-  ): VueFunctionComponentVnode;
+  (props: P & VnodeJsxProps): VueFunctionComponentVnode;
   readonly $$typeof: symbol;
 }
 
@@ -317,21 +320,14 @@ export function defineFunctionComponent(render: any, options?: any): any {
 
   if ((render as any).$$typeof) return render as any;
 
-  const componentOptions = (options ?? {
-    props: (render as any).props,
-    emits: (render as any).emits,
-    slots: (render as any).slots,
-  }) as any;
-
-  const componentFCName =
-    (componentOptions && componentOptions.name) || (render as any).name;
+  const displayName = (options && options.name) || (render as any).name;
 
   const instanceRender = ref<any>(render);
 
   let renderError: Error | string | void;
 
   const handlers = {
-    [componentFCName](props: any, context: SetupContext) {
+    [displayName](props: any, context: SetupContext) {
       let renderResult: any = null,
         prevQueue,
         memoizedEffect;
@@ -353,13 +349,7 @@ export function defineFunctionComponent(render: any, options?: any): any {
       const ctx = currentInstanceContext;
       try {
         const renderFn = toValue(instanceRender);
-        const vnode = currentInstanceContext?.instance?.vnode;
-        if (vnode) {
-          const vnodeProps = vnode.props;
-          if (vnodeProps && hasOwn(vnodeProps, "ref")) {
-            props.ref = vnodeProps.ref;
-          }
-        }
+        const componentInstance = getCurrentInstance()!;
         switch (renderFlag) {
           case DefineFunctionComponentRenderType.ERROR:
             if (renderOptions.error) {
@@ -369,7 +359,13 @@ export function defineFunctionComponent(render: any, options?: any): any {
             }
             break;
           case DefineFunctionComponentRenderType.FUNCTION:
-            renderResult = renderFn!(props);
+            switch (handler.$$typeof) {
+              case void 0:
+                renderResult = null;
+                break;
+              default:
+                renderResult = renderFn!(props);
+            }
             if (process.env.NODE_ENV !== "production" && prevQueue !== null) {
               if (memoizedEffect!.prevLast !== memoizedEffect!.last) {
                 throw new Error(
@@ -379,48 +375,67 @@ export function defineFunctionComponent(render: any, options?: any): any {
             }
             break;
           case DefineFunctionComponentRenderType.ASYNC_FUNCTION:
-            const currentContext = currentInstanceContext;
-            const promiseRes = Promise.resolve((renderFn as any)());
-            renderFlag = DefineFunctionComponentRenderType.LOADING;
-            promiseRes
-              .then((comp: any) => {
-                if (currentContext?.instance?.isUnmounted) {
-                  instanceRender.value = null;
-                  return;
-                }
-                if (
-                  comp &&
-                  (comp.__esModule || comp[Symbol.toStringTag] === "Module")
-                ) {
-                  comp = comp.default;
-                }
-                if (!isFunction(comp)) {
-                  if (process.env.NODE_ENV !== "production") {
-                    warn(
-                      "function.component(asyncComponent): The promise reslove must return a valid render function. but received:",
-                      comp
+            let promiseRes;
+            try {
+              promiseRes = Promise.resolve((renderFn as any)());
+              renderFlag = DefineFunctionComponentRenderType.LOADING;
+              instanceRender.value = null;
+              promiseRes
+                .then((comp: any) => {
+                  if (componentInstance.isUnmounted) {
+                    return;
+                  }
+                  if (
+                    comp &&
+                    (comp.__esModule || comp[Symbol.toStringTag] === "Module")
+                  ) {
+                    comp = comp.default;
+                  }
+                  if (!isFunction(comp)) {
+                    throw new Error(
+                      "The reslove must return a valid render function. but received:",
+                      {
+                        cause: comp,
+                      }
                     );
                   }
-                  instanceRender.value = null;
-                  throw new Error();
-                }
-                renderFlag = DefineFunctionComponentRenderType.FUNCTION;
-                instanceRender.value = comp;
-              })
-              .catch((err: any) => {
-                renderError = err;
-                renderFlag = DefineFunctionComponentRenderType.ERROR;
-                instanceRender.value = null;
-                if (
-                  !renderOptions.error &&
-                  process.env.NODE_ENV !== "production"
-                ) {
-                  warn(
-                    "function.component(asyncComponent) error",
-                    err.toString()
-                  );
-                }
-              });
+                  renderFlag = DefineFunctionComponentRenderType.FUNCTION;
+                  instanceRender.value = comp;
+                })
+                .catch((err: Error) => {
+                  if (componentInstance.isUnmounted) {
+                    return;
+                  }
+                  renderError = err;
+                  renderFlag = DefineFunctionComponentRenderType.ERROR;
+                  if (process.env.NODE_ENV !== "production") {
+                    warn(
+                      "Async component loading failed.",
+                      "\nPossible reasons:",
+                      "\n1. Network error when importing the module.",
+                      "\n2. The exported component is not a valid function.",
+                      "\n3. Module system mismatch (e.g., mixing ES Modules).",
+                      "\nError details:",
+                      err && err.toString(),
+                      err.cause ?? ""
+                    );
+                  }
+                  triggerRef(instanceRender);
+                });
+            } catch (syncError: any) {
+              renderError = syncError;
+              renderFlag = DefineFunctionComponentRenderType.ERROR;
+              if (process.env.NODE_ENV !== "production") {
+                warn(
+                  "Async component render function threw an error during initialization.",
+                  "\nError:",
+                  syncError,
+                  "\nStack:",
+                  syncError.stack
+                );
+              }
+              break;
+            }
           case DefineFunctionComponentRenderType.LOADING:
             if (renderFlag === DefineFunctionComponentRenderType.LOADING) {
               if (renderOptions.loading) {
@@ -434,7 +449,7 @@ export function defineFunctionComponent(render: any, options?: any): any {
       } catch (err: any) {
         renderFlag = DefineFunctionComponentRenderType.ERROR;
         if (process.env.NODE_ENV !== "production") {
-          warn("function.component render", err);
+          warn("Error during function.component run render :", err);
         }
         renderResult = null;
       } finally {
@@ -447,16 +462,28 @@ export function defineFunctionComponent(render: any, options?: any): any {
     },
   };
 
-  const handler = handlers[componentFCName] as any;
+  const handler = handlers[displayName].bind(void 0) as any;
+
+  initOptions(handler, options);
 
   handler.$$typeof = __v_FC_component;
 
-  Object.assign(handler, {
-    props: componentOptions.props,
-    emits: componentOptions.emits,
-    slots: componentOptions.slots,
-  });
   return handler as any;
+}
+
+function initOptions(
+  handler: any,
+  options: DefineFunctionComponentOptions | void
+) {
+  if (options) {
+    for (let k in options) {
+      switch (k) {
+        case "name":
+          continue;
+      }
+      handler[k] = (options as any)[k];
+    }
+  }
 }
 
 export type VueFunctionComponentVnode =

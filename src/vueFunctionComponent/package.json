@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "A Vue 3 project using function components with TypeScript and JSX",
   "main": "packages/main",
-  "types": "packages/types/index.d.ts",
+  "types": "",
   "scripts": {
     "build": "rollup --config"
   },

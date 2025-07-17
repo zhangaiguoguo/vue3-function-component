@@ -1,53 +1,16 @@
 <script lang="tsx" setup>
 import {
-  createContext,
   defineFunctionComponent,
   defineFunctionSlots,
   startTransition,
   useCallback,
-  useContext,
-  useSetupContext,
-  useState,useSlots
+  useState,
 } from "@/vueFunctionComponent";
-
-const C = createContext(123);
-const C2 = createContext(173);
+import { C } from "./components/context";
+import Cc from "./components/async/Cc";
+import { defineAsyncComponent } from "vue";
 
 console.log(C);
-
-const Cc = defineFunctionComponent(
-  {
-    async loader() {
-      await new Promise((rlt) => {
-        setTimeout(rlt, 2000);
-      });
-      return Promise.resolve((props) => {
-        const [count, setCount] = useState(1);
-        const value = useContext(C);
-        // console.log(useContext(C2));
-        const slots = useSlots();
-        return (
-          <>
-            <h1>
-              Cc - {props.a} - {value}
-            </h1>
-            <h1>Cc count - {count}</h1>
-            <button onClick={() => setCount((count + 1) * props.a)}>
-              count++
-            </button>
-            {slots.default && slots.default()}
-          </>
-        );
-      });
-    },
-    loading() {
-      return "loading...";
-    },
-  },
-  {
-    props: ["a", "b"] as const,
-  }
-);
 
 const A = defineFunctionComponent(
   (props) => {
@@ -100,10 +63,29 @@ const A = defineFunctionComponent(
     props: ["a", "b"] as const,
   }
 );
+
+const AA = defineAsyncComponent(() => {
+  return import("./components/async/AA.vue");
+});
 </script>
 
 <template>
   <transition>
-    <A :a="1" :b="[1, 2, 3]" />
+    <div>
+      <Cc :a="1" :b="[1, 2, 3]" />
+      <Cc :a="1" :b="[1, 2, 3]" />
+      <Suspense>
+        <AA />
+        <template #fallback>
+          <div>loading...</div>
+        </template>
+      </Suspense>
+      <Suspense>
+        <AA />
+        <template #fallback>
+          <div>loading...</div>
+        </template>
+      </Suspense>
+    </div>
   </transition>
 </template>

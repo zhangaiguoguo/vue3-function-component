@@ -3,10 +3,11 @@ import { isArray } from "../shared";
 import {
   type DefineFunctionComponentInstanceContext,
   getCurrentFunctionComponentInstance,
-} from "./defineFunctionComponent";
+  currentInstanceContext,
+} from "./defineFunctionComponent/index";
 
 function injectCurrentInstanceLifeCycle(fn: () => any, key: string) {
-  const c = getCurrentFunctionComponentInstance();
+  const c = currentInstanceContext!;
   if (c) {
     const instance = c.instance as any;
     if (isArray(instance[key])) {

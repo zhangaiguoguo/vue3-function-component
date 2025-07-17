@@ -16,8 +16,9 @@ export default defineConfig({
     extensions: [".mjs", ".js", ".ts", ".jsx", ".tsx", ".json", ".vue"],
   },
   esbuild: {
-    jsxFactory: "React.h",
-    jsxInject: `import React from "@/hooks/react"`,
+    jsxFactory: "h",
+    jsxFragment: "Fragment",
+    jsxInject: "import { h, Fragment } from 'vue'",
   },
   server: {
     port: 4001,

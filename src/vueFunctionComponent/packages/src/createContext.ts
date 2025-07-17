@@ -7,7 +7,7 @@ import {
   useSlots,
   type ExoticComponent,
   type VueFunctionComponentVnode,
-} from "./defineFunctionComponent";
+} from "./defineFunctionComponent/index";
 import { useEffectImpl } from "./hooks/dispatcher";
 import { EffectQueueFlag } from "./hooks/hookFlag";
 import { Priority } from "./scheduler";
@@ -16,7 +16,7 @@ import { useContext } from "./hooks";
 
 interface ProviderProps<T> {
   value: T;
-  children?: VueFunctionComponentVnode | undefined;
+  children?: VueFunctionComponentVnode;
 }
 interface ConsumerProps<T> {
   children: (value: T) => VueFunctionComponentVnode;
@@ -118,7 +118,8 @@ export function createContext<T>(defaultValue: T): Context<T> {
   context._currentRenderer2 = null;
   context._currentRenderer = null;
   Object.assign(Provider, context);
-  context = new Proxy(Provider, {});
+  context =
+    process.env.NODE_ENV !== "production" ? new Proxy(Provider, {}) : Provider;
   context.Consumer._context = context;
   return context as Context<T>;
 }

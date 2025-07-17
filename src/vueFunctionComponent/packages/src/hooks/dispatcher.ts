@@ -4,7 +4,7 @@ import {
   type DefineFunctionComponentInstanceContext,
   getCurrentFunctionComponentInstance,
   inject,
-} from "../defineFunctionComponent";
+} from "../defineFunctionComponent/index";
 import { EffectFlagName, EffectQueueFlag } from "./hookFlag";
 import { scheduleTask, Priority, cancelDuplicateTask } from "../scheduler";
 

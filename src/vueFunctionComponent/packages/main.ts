@@ -5,10 +5,10 @@ export {
   useAttrs,
   useProps,
   useSlots,
-} from "./src/defineFunctionComponent";
+} from "./src/defineFunctionComponent/index";
 
 export * from "./src/hooks";
 
-export * from "./src/createContext"
+export * from "./src/createContext";
 
 export * from "./src/lifeCycle";
