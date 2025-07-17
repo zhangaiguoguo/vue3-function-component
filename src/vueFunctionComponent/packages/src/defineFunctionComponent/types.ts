@@ -52,14 +52,21 @@ export enum RenderType {
   ASYNC_FUNCTION = "asyncFunction",
 }
 
+export enum RuntimeFlag {
+  WAIT = 1,
+  FULFILLED = 2,
+  REJECTED = 3,
+}
+
 export type DefineFunctionComponentRenderContext<Props = Record<string, any>> =
   {
     render: (props: Props) => VueFunctionComponentVnode;
     handleRender: ExoticComponent<Props>;
     displayName: string;
     renderError: DefineAsyncFunctionComponentErrorRenderProps["error"];
-    renderResult: VueFunctionComponentVnode;
     renderFlag: RenderType;
+    waitComponents: Set<DefineFunctionComponentInstanceContext>;
+    runtimeFlag: RuntimeFlag;
   } & DefineAsyncFunctionComponentRenderOptions<Props>;
 
 export type DefineFunctionComponentOptionsProps<

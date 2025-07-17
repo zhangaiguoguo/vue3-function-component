@@ -8,7 +8,7 @@ import {
 } from "@/vueFunctionComponent";
 import { C } from "./components/context";
 import Cc from "./components/async/Cc";
-import { defineAsyncComponent } from "vue";
+import { defineAsyncComponent, ref } from "vue";
 
 console.log(C);
 
@@ -41,7 +41,7 @@ const A = defineFunctionComponent(
             </Cc>
           )}
         </C.Provider>
-        <C
+        {/* <C
           value={count}
           children={
             <C.Consumer>
@@ -50,7 +50,7 @@ const A = defineFunctionComponent(
               }}
             </C.Consumer>
           }
-        ></C>
+        ></C> */}
         {/* <C2 value={1314} children={<Cc a={1} b={count}></Cc>}></C2> */}
         {/* {new Array(1).fill(1).map((i, index) => (
           <Cc a={index + 1} />
@@ -67,25 +67,16 @@ const A = defineFunctionComponent(
 const AA = defineAsyncComponent(() => {
   return import("./components/async/AA.vue");
 });
+const count = ref(1)
 </script>
 
 <template>
   <transition>
     <div>
-      <Cc :a="1" :b="[1, 2, 3]" />
-      <Cc :a="1" :b="[1, 2, 3]" />
-      <Suspense>
-        <AA />
-        <template #fallback>
-          <div>loading...</div>
-        </template>
-      </Suspense>
-      <Suspense>
-        <AA />
-        <template #fallback>
-          <div>loading...</div>
-        </template>
-      </Suspense>
+      <!-- <Cc :a="count" :b="[1, 2, 3]" /> -->
+      <A :a="count" :b="[1, 2, 3]" />
+      <h1>{{ count }}</h1>
+      <button @click="count++">点击</button>
     </div>
   </transition>
 </template>

@@ -14,6 +14,7 @@ import {
   DefineFunctionComponentRender,
   ExoticComponent,
   RenderType,
+  RuntimeFlag,
   type DefineAsyncFunctionComponentErrorRenderProps,
   type DefineFunctionComponentInstanceContext,
   type DefineFunctionComponentOptions,
@@ -207,7 +208,9 @@ export function defineFunctionComponent(render: any, options?: any): any {
 
 const createComponentHandler = (render: any, options: any) => {
   let renderContext = {
+    runtimeFlag: RuntimeFlag.WAIT,
     renderFlag: RenderType.FUNCTION,
+    waitComponents: new Set(),
   } as DefineFunctionComponentRenderContext;
 
   if (typeof render === "object") {
@@ -222,6 +225,7 @@ const createComponentHandler = (render: any, options: any) => {
     renderContext = Object.assign(renderContext, render);
   } else {
     renderContext.render = render;
+    renderContext.runtimeFlag = RuntimeFlag.FULFILLED;
   }
   const displayName = (renderContext.displayName = getComponentDisplayName(
     renderContext,
@@ -230,7 +234,9 @@ const createComponentHandler = (render: any, options: any) => {
   renderContext.renderError = void 0;
   const handleRender = {
     [displayName](props: any, context: SetupContext) {
-      let prevQueue, memoizedEffect;
+      let prevQueue,
+        memoizedEffect,
+        renderVnode = null;
       const prevFunctionIntanceContext = currentInstanceContext!,
         prevCurrentRuntimeRenderInstanceContext =
           currentRuntimeRenderInstanceContext!;
@@ -244,17 +250,24 @@ const createComponentHandler = (render: any, options: any) => {
         }
         prevQueue = memoizedEffect.queue;
       }
-      const ctx = currentInstanceContext;
-
+      const ctx = currentInstanceContext!;
+      if (renderContext.runtimeFlag === RuntimeFlag.WAIT) {
+        if (!renderContext.waitComponents.has(ctx)) {
+          onUnmounted(() => {
+            renderContext.waitComponents.delete(ctx);
+          });
+        }
+        renderContext.waitComponents.add(ctx);
+      }
       try {
         switch (renderContext.renderFlag) {
           case RenderType.ERROR:
-            handleErrorRender(renderContext);
+            renderVnode = handleErrorRender(renderContext);
             break;
 
           case RenderType.FUNCTION:
             currentRuntimeRenderInstanceContext = currentInstanceContext;
-            handleFunctionRender(renderContext, options);
+            renderVnode = handleFunctionRender(renderContext, options);
             if (process.env.NODE_ENV !== "production" && prevQueue !== null) {
               if (memoizedEffect!.prevLast !== memoizedEffect!.last) {
                 throw new Error(
@@ -269,7 +282,7 @@ const createComponentHandler = (render: any, options: any) => {
 
           case RenderType.LOADING:
             if (renderContext.renderFlag === RenderType.LOADING) {
-              handleLoadingRender(renderContext);
+              renderVnode = handleLoadingRender(renderContext);
             }
             break;
         }
@@ -278,7 +291,6 @@ const createComponentHandler = (render: any, options: any) => {
         if (process.env.NODE_ENV !== "production") {
           warn("Error during function.component run render :", err);
         }
-        renderContext.renderResult = null;
       } finally {
         if (renderContext.renderFlag === RenderType.FUNCTION) {
           ctx!.firstRenderFlag = 1;
@@ -288,7 +300,7 @@ const createComponentHandler = (render: any, options: any) => {
           prevCurrentRuntimeRenderInstanceContext || null;
       }
 
-      return renderContext.renderResult;
+      return renderVnode ?? null;
     },
   }[displayName].bind(void 0);
   renderContext.handleRender =
@@ -300,12 +312,10 @@ const handleErrorRender = (
   renderContext: DefineFunctionComponentRenderContext
 ) => {
   if (renderContext.error) {
-    renderContext.renderResult = h(renderContext.error as any, {
+    return h(renderContext.error as any, {
       error: renderContext.renderError,
     });
-    return;
   }
-  renderContext.renderResult = null;
 };
 
 const handleFunctionRender = (
@@ -316,10 +326,9 @@ const handleFunctionRender = (
 
   switch (renderContext.handleRender.$$typeof) {
     case void 0:
-      renderContext.renderResult = null;
       break;
     default:
-      renderContext.renderResult = renderContext.render!(ctx.props);
+      return renderContext.render!(ctx.props);
   }
 };
 
@@ -328,66 +337,65 @@ const handleAsyncRender = async (
   options: DefineFunctionComponentOptions
 ) => {
   let promiseRes,
-    componentInstance = getCurrentInstance()!,
-    ctx = currentInstanceContext!;
+    componentInstance = getCurrentInstance()!;
   try {
     promiseRes = Promise.resolve(renderContext.loader());
     renderContext.renderFlag = RenderType.LOADING;
+    const comp: any = await promiseRes;
+    if (componentInstance.isUnmounted) return;
 
-    try {
-      const comp: any = await promiseRes;
-      if (componentInstance.isUnmounted) return;
+    const resolvedComp =
+      comp && (comp.__esModule || comp[Symbol.toStringTag] === "Module")
+        ? comp.default
+        : comp;
 
-      const resolvedComp =
-        comp && (comp.__esModule || comp[Symbol.toStringTag] === "Module")
-          ? comp.default
-          : comp;
-
-      if (!isFunction(resolvedComp)) {
-        throw new Error(
-          "The resolve must return a valid render function. but received:",
-          {
-            cause: resolvedComp,
-          }
-        );
-      }
-
-      renderContext.renderFlag = RenderType.FUNCTION;
-      renderContext.render = resolvedComp;
-    } catch (err: any) {
-      if (componentInstance.isUnmounted) return;
-      renderContext.renderError = err;
-      renderContext.renderFlag = RenderType.ERROR;
-      if (process.env.NODE_ENV !== "production") {
-        warn(
-          "Async component loading failed.",
-          "\nError details:",
-          err?.cause ? err.toString() : err,
-          err?.cause ?? ""
-        );
-      }
-    }
-    ctx.hooks.update();
-  } catch (syncError: any) {
-    renderContext.renderError = syncError;
-    renderContext.renderFlag = RenderType.ERROR;
-    if (process.env.NODE_ENV !== "production") {
-      warn(
-        "Async component render function threw an error during initialization.",
-        "\nError:",
-        syncError
+    if (!isFunction(resolvedComp)) {
+      throw new Error(
+        "The resolve must return a valid render function. but received:",
+        {
+          cause: resolvedComp,
+        }
       );
     }
-    ctx.hooks.update();
+
+    renderContext.renderFlag = RenderType.FUNCTION;
+    renderContext.runtimeFlag = RuntimeFlag.FULFILLED;
+    renderContext.render = resolvedComp;
+    runRenderContextWaitComponentsAgainRender(renderContext);
+  } catch (err: any) {
+    if (componentInstance.isUnmounted) return;
+    renderContext.renderError = err;
+    renderContext.renderFlag = RenderType.ERROR;
+    renderContext.runtimeFlag = RuntimeFlag.REJECTED;
+    if (process.env.NODE_ENV !== "production") {
+      warn(
+        "Async component loading failed.",
+        "\nError details:",
+        err?.cause ? err.toString() : err,
+        err?.cause ?? ""
+      );
+    }
+    runRenderContextWaitComponentsAgainRender(renderContext);
   }
 };
+
+function runRenderContextWaitComponentsAgainRender(
+  renderContext: DefineFunctionComponentRenderContext,
+  clearFlag = true
+) {
+  for (let ctx of renderContext.waitComponents) {
+    ctx.hooks.update();
+  }
+  if (clearFlag) {
+    renderContext.waitComponents.clear();
+  }
+}
 
 const handleLoadingRender = (
   renderContext: DefineFunctionComponentRenderContext
 ) => {
   if (renderContext.loading) {
-    renderContext.renderResult = h(renderContext.loading as any);
+    return h(renderContext.loading as any);
     return;
   }
-  renderContext.renderResult = null;
 };
