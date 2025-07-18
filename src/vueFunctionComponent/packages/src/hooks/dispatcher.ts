@@ -1,4 +1,4 @@
-import { warn } from "vue";
+import { toValue, warn } from "vue";
 import { EMPTY_OBJ, hasChanged, isFunction, NOOP, NOOP2 } from "../../shared";
 import {
   type DefineFunctionComponentInstanceContext,
@@ -610,7 +610,7 @@ export const dispatcher = {
       Priority.SYNC
     );
 
-    return effectQueue.memoizedState?.value;
+    return toValue(effectQueue.memoizedState);
   },
 };
 

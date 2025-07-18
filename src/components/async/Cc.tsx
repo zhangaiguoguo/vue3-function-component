@@ -3,7 +3,6 @@ import { defineFunctionComponent, useState } from "@/vueFunctionComponent";
 const Cc = defineFunctionComponent(
   {
     loader: () => {
-      console.log("xxxx");
       return import("./CcRender");
     },
     loading() {

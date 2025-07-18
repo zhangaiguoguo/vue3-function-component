@@ -6,7 +6,7 @@ import {
   useCallback,
   useState,
 } from "@/vueFunctionComponent";
-import { C } from "./components/context";
+import { C, C2 } from "./components/context";
 import Cc from "./components/async/Cc";
 import { defineAsyncComponent, ref } from "vue";
 
@@ -41,7 +41,7 @@ const A = defineFunctionComponent(
             </Cc>
           )}
         </C.Provider>
-        {/* <C
+        <C
           value={count}
           children={
             <C.Consumer>
@@ -50,11 +50,11 @@ const A = defineFunctionComponent(
               }}
             </C.Consumer>
           }
-        ></C> */}
-        {/* <C2 value={1314} children={<Cc a={1} b={count}></Cc>}></C2> */}
-        {/* {new Array(1).fill(1).map((i, index) => (
+        ></C>
+        <C2 value={1314} children={<Cc a={1} b={count}></Cc>}></C2>
+        {new Array(1).fill(1).map((i, index) => (
           <Cc a={index + 1} />
-        ))} */}
+        ))}
       </div>
     );
   },
