@@ -270,9 +270,11 @@ const createComponentHandler = (render: any, options: any) => {
             renderVnode = handleFunctionRender(renderContext, options);
             if (process.env.NODE_ENV !== "production" && prevQueue !== null) {
               if (memoizedEffect!.prevLast !== memoizedEffect!.last) {
-                throw new Error(
-                  "The hook for rendering is different from expected. This may be caused by an unexpected premature return statement."
-                );
+                if (process.env.NODE_ENV !== "production")
+                  throw new Error(
+                    "The hook for rendering is different from expected. This may be caused by an unexpected premature return statement."
+                  );
+                else throw new Error();
               }
             }
             break;
@@ -350,12 +352,14 @@ const handleAsyncRender = async (
         : comp;
 
     if (!isFunction(resolvedComp)) {
-      throw new Error(
-        "The resolve must return a valid render function. but received:",
-        {
-          cause: resolvedComp,
-        }
-      );
+      if (process.env.NODE_ENV !== "production")
+        throw new Error(
+          "The resolve must return a valid render function. but received:",
+          {
+            cause: resolvedComp,
+          }
+        );
+      else throw new Error();
     }
 
     renderContext.renderFlag = RenderType.FUNCTION;
@@ -396,6 +400,5 @@ const handleLoadingRender = (
 ) => {
   if (renderContext.loading) {
     return h(renderContext.loading as any);
-    return;
   }
 };

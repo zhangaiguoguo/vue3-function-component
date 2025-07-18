@@ -28,18 +28,12 @@ const A = defineFunctionComponent(
         <h1>A - {count}</h1>
         <button onClick={setCount2}>count++</button>
         <C.Provider value={count}>
-          {defineFunctionSlots(
-            <Cc a={1} b={1}>
-              {defineFunctionSlots(
-                <>
-                  <C.Provider
-                    value={count * 2}
-                    children={<Cc a={2}></Cc>}
-                  ></C.Provider>
-                </>
-              )}
-            </Cc>
-          )}
+          <Cc a={1} b={1}>
+            <C.Provider
+              value={count * 2}
+              children={<Cc a={2}>{[]}</Cc>}
+            ></C.Provider>
+          </Cc>
         </C.Provider>
         <C
           value={count}
@@ -67,7 +61,7 @@ const A = defineFunctionComponent(
 const AA = defineAsyncComponent(() => {
   return import("./components/async/AA.vue");
 });
-const count = ref(1)
+const count = ref(1);
 </script>
 
 <template>

@@ -12,3 +12,5 @@ export * from "./src/hooks";
 export * from "./src/createContext";
 
 export * from "./src/lifeCycle";
+
+export * from "./src/h";

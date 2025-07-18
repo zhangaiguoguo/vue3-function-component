@@ -11,7 +11,12 @@ export function defineFunctionSlots(slot: Slot): { default: Slot };
 export function defineFunctionSlots(...args: Slot[]): Slots;
 
 export function defineFunctionSlots(...slots: any): any {
-  const slots2: any = {};
+  if (slots[0] && slots[0].slots2) {
+    return slots[0];
+  }
+  const slots2: any = {
+    _slotSkip: true,
+  };
   for (let slot of slots) {
     if (isVNode(slot)) {
       slots2.default = () => slot;
