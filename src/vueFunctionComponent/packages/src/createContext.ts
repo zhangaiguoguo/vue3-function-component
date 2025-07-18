@@ -63,7 +63,6 @@ export function createContext<T>(defaultValue: T): Context<T> {
       Priority.SYNC
     );
     context._currentRenderer = state;
-    state.value;
     try {
       if (props.children) {
         return h(Fragment, [props.children]);

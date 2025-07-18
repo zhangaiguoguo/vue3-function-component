@@ -583,10 +583,10 @@ export const dispatcher = {
         let injectResult;
         const currentRenderValue = (context as any)._currentRenderer;
         if (currentRenderValue) {
-          effectQueue.memoizedState = currentRenderValue.value;
+          effectQueue.memoizedState = currentRenderValue;
         } else if ((injectResult = inject<any>(context, NOOP, true))) {
           if (injectResult) {
-            effectQueue.memoizedState = injectResult.value;
+            effectQueue.memoizedState = injectResult;
             ctx.provides.set(context, injectResult);
           }
         } else {
@@ -610,7 +610,7 @@ export const dispatcher = {
       Priority.SYNC
     );
 
-    return effectQueue.memoizedState;
+    return effectQueue.memoizedState?.value;
   },
 };
 

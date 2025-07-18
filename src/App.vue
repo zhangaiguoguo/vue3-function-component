@@ -29,7 +29,7 @@ const A = defineFunctionComponent(
         <button onClick={setCount2}>count++</button>
         <C.Provider value={count}>
           {defineFunctionSlots(
-            <Cc a={1} b={count}>
+            <Cc a={1} b={1}>
               {defineFunctionSlots(
                 <>
                   <C.Provider
