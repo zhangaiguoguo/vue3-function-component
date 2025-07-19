@@ -1,6 +1,9 @@
-import { isObject2, isArray } from "../shared";
+import { isObject2, isArray, isFunction, def } from "./shared";
 import { Fragment, isVNode, h as JSX } from "vue";
-import { defineFunctionSlots } from "./defineFunctionComponent";
+import {
+  defineFunctionComponent,
+  defineFunctionSlots,
+} from "./defineFunctionComponent";
 
 export function h(type: any, propsOrChildren: any, children: any) {
   if (type.$$typeof) {
@@ -25,6 +28,22 @@ export function h(type: any, propsOrChildren: any, children: any) {
   }
 
   return (JSX as any)(...arguments);
+}
+
+const functionComponentTypeCaches = new WeakMap();
+export function createJsxFunctionComponent(type: any, ...args: any[]) {
+  if (type && !type.__v_skip && isFunction(type)) {
+    if (!functionComponentTypeCaches.has(type)) {
+      functionComponentTypeCaches.set(type, defineFunctionComponent(type));
+    }
+    type = functionComponentTypeCaches.get(type);
+  }
+  return (h as any)(type, ...args);
+}
+
+export function markRegularFunctionComponent(type: (...args: any[]) => any) {
+  def(type, "__v_skip", true);
+  return type;
 }
 
 export { Fragment };

@@ -2,8 +2,8 @@
   "name": "vue3-function-component",
   "version": "1.0.0",
   "description": "A Vue 3 project using function components with TypeScript and JSX",
-  "main": "packages/main",
   "types": "packages/types/index",
+  "main": "packages/src/index",
   "scripts": {
     "build": "rollup --config"
   },

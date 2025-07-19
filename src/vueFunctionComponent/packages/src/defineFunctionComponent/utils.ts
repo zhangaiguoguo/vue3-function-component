@@ -1,4 +1,4 @@
-import { isFunction, isObject as isObject2 } from "../../shared";
+import { isFunction, isObject as isObject2 } from "../shared";
 import { warn } from "vue";
 import type {
   DefineFunctionComponentInstanceContext,

@@ -1,8 +1,4 @@
-import * as vue from 'vue';
-
-const {createApp} = vue
-
-
+import {createApp} from 'vue';
 import './style.css'
 // @ts-ignore
 import App from './App.vue'

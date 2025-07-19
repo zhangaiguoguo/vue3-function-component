@@ -1,5 +1,5 @@
 import { toValue, warn } from "vue";
-import { EMPTY_OBJ, hasChanged, isFunction, NOOP, NOOP2 } from "../../shared";
+import { EMPTY_OBJ, hasChanged, isFunction, NOOP, NOOP2 } from "../shared";
 import {
   type DefineFunctionComponentInstanceContext,
   getCurrentFunctionComponentInstance,
@@ -35,7 +35,6 @@ export interface EffectQueue<T = any> {
   dispatch?: Dispatch<SetStateAction<T>>;
   hooks?: EffectHooks;
   lane: number; // 优先级通道
-  isConcurrent?: boolean;
   memoizedState?: T;
   queue?: EffectQueue[];
   type: 1 | 2;
@@ -145,7 +144,6 @@ function initOrReuseHookQueue<T>(
     effect = memoizedEffect.queue = create(ctx) as EffectQueue<T>;
     effect.lane = lane;
     effect.flag = queueFlag;
-    effect.isConcurrent = true;
     memoizedEffect.last = effect;
     return effect;
   }

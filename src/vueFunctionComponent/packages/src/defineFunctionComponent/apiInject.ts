@@ -1,6 +1,6 @@
 import { warn } from "vue";
 import { currentInstanceContext } from "./functionComponent";
-import { isFunction } from "../../shared";
+import { isFunction } from "../shared";
 
 export function provide<T, K = any>(key: K, value: T): void;
 export function provide(key: any, value: any) {

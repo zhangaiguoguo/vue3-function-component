@@ -1,5 +1,5 @@
 import { warn } from "vue";
-import { isArray } from "../shared";
+import { isArray } from "./shared";
 import {
   type DefineFunctionComponentInstanceContext,
   getCurrentFunctionComponentInstance,

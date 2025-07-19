@@ -15,7 +15,6 @@ import {
   ExoticComponent,
   RenderType,
   RuntimeFlag,
-  type DefineAsyncFunctionComponentErrorRenderProps,
   type DefineFunctionComponentInstanceContext,
   type DefineFunctionComponentOptions,
   type DefineFunctionComponentRenderContext,
@@ -25,7 +24,7 @@ import {
   getComponentDisplayName,
   validateRenderInput,
 } from "./utils";
-import { isFunction } from "../../shared";
+import { isFunction } from "../shared";
 import { type LooseRequired, type Prettify } from "@vue/shared";
 import { onUnmounted } from "../lifeCycle";
 

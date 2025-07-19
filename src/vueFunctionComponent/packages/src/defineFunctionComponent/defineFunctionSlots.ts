@@ -1,4 +1,4 @@
-import { extend, isFunction, isObject2 } from "../../shared";
+import { extend, isFunction, isObject2 } from "../shared";
 import { isVNode, type Slots } from "vue";
 import type { VueFunctionComponentVnode } from "./types";
 

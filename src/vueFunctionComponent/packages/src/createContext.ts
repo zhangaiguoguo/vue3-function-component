@@ -11,7 +11,7 @@ import {
 import { useEffectImpl } from "./hooks/dispatcher";
 import { EffectQueueFlag } from "./hooks/hookFlag";
 import { Priority } from "./scheduler";
-import { isFunction } from "../shared";
+import { isFunction } from "./shared";
 import { useContext } from "./hooks";
 
 interface ProviderProps<T> {

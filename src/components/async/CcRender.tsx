@@ -1,9 +1,9 @@
 import { useContext, useSlots, useState } from "@/vueFunctionComponent";
 import { C, C2 } from "../context";
 // import { h } from "vue";
-await new Promise((rst) => {
-  setTimeout(rst, 2000);
-});
+// await new Promise((rst) => {
+//   setTimeout(rst, 2000);
+// });
 const CcRedner = (props) => {
   const [count, setCount] = useState(1);
   const value = useContext(C);

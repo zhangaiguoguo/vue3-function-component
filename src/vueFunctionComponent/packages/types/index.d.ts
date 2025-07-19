@@ -38,7 +38,6 @@ interface EffectQueue<T = any> {
     dispatch?: Dispatch<SetStateAction<T>>;
     hooks?: EffectHooks;
     lane: number;
-    isConcurrent?: boolean;
     memoizedState?: T;
     queue?: EffectQueue[];
     type: 1 | 2;
@@ -165,15 +164,12 @@ declare function useImperativeHandle(ref: {
 declare function useTransition(): [boolean, StartTransition];
 declare function useContext<T>(context: Context<T>): T;
 
-declare function onUnmounted(fn: () => any): void;
 declare function onBeforeUnmount(fn: () => any): void;
-declare function onMounted(fn: () => any): void;
 declare function onUnMounted(fn: () => any): void;
-declare function onBeforeMount(fn: () => any): void;
-declare function onBeforeUpdate(fn: () => any): void;
-declare function onUpdated(fn: () => any): void;
 
 declare function h(type: any, propsOrChildren: any, children: any): any;
+declare function createJsxFunctionComponent(type: any, ...args: any[]): any;
+declare function markRegularFunctionComponent(type: (...args: any[]) => any): (...args: any[]) => any;
 
-export { createContext, defineFunctionComponent, defineFunctionSlots, h, onBeforeMount, onBeforeUnmount, onBeforeUpdate, onMounted, onUnMounted, onUnmounted, onUpdated, startTransition, useAttrs, useCallback, useContext, useDeferredValue, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useProps, useReducer, useRef, useSetupContext, useSlots, useState, useSyncExternalStore, useTransition };
+export { createContext, createJsxFunctionComponent, defineFunctionComponent, defineFunctionSlots, h, markRegularFunctionComponent, onBeforeUnmount, onUnMounted, startTransition, useAttrs, useCallback, useContext, useDeferredValue, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useProps, useReducer, useRef, useSetupContext, useSlots, useState, useSyncExternalStore, useTransition };
 export type { Context };
