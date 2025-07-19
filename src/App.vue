@@ -1,7 +1,7 @@
 <script lang="tsx" setup>
 import { ref } from 'vue';
 import Cc from './components/async/Cc';
-import { useState, markRegularFunctionComponent, useContext, useRef, createJsxFunctionComponent } from '@/vueFunctionComponent';
+import { useState, markRegularFunctionComponent, useContext, useRef, createJsxFunctionComponent } from 'vue-function-component';
 import { C } from './components/context';
 
 const B = ((props: { a: number }) => {

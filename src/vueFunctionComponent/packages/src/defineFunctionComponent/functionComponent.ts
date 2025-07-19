@@ -240,7 +240,9 @@ const createComponentHandler = (render: any, options: any) => {
         prevCurrentRuntimeRenderInstanceContext =
           currentRuntimeRenderInstanceContext!;
       defineFunctionComponentContext(props, context);
-      console.log(currentInstanceContext);
+      if (process.env.NODE_ENV !== "production") {
+        console.log(currentInstanceContext);
+      }
       if (renderContext.renderFlag === RenderType.FUNCTION) {
         memoizedEffect = currentInstanceContext!.memoizedEffect;
         if (memoizedEffect.queue) {
