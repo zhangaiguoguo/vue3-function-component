@@ -45,11 +45,12 @@ export function createContext<T>(defaultValue: T): Context<T> {
   const Provider = defineFunctionComponent<ProviderProps<T>>(function Provider(
     props
   ) {
-    if (process.env.NODE_ENV !== "production" && !("value" in props)) {
-      throw new Error(
-        "The `value` prop is required for the `<Context.Provider>`. Did you misspell it or forget to pass it?"
-      );
-    }
+    if (process.env.NODE_ENV !== "production")
+      if (!("value" in props)) {
+        throw new Error(
+          "The `value` prop is required for the `<Context.Provider>`. Did you misspell it or forget to pass it?"
+        );
+      }
     const prevRenderer = context._currentRenderer;
     const provides = getCurrentFunctionComponentInstance().provides;
     const state = (provides ? provides.get(context) : null) || ref();
@@ -97,13 +98,12 @@ export function createContext<T>(defaultValue: T): Context<T> {
       try {
         switch (flag) {
           case 1:
-            if (
-              process.env.NODE_ENV !== "production" &&
-              !isFunction(props.children)
-            ) {
-              throw new Error(
-                "A context consumer was rendered with multiple children, or a child that isn't a function. A context consumer expects a single child that is a function. If you did pass a function, make sure there is no trailing or leading whitespace around it."
-              );
+            if (process.env.NODE_ENV !== "production") {
+              if (!isFunction(props.children)) {
+                throw new Error(
+                  "A context consumer was rendered with multiple children, or a child that isn't a function. A context consumer expects a single child that is a function. If you did pass a function, make sure there is no trailing or leading whitespace around it."
+                );
+              }
             }
             return props.children(value);
           case 2:

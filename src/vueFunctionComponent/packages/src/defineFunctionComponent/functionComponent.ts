@@ -54,14 +54,14 @@ export const defineFunctionComponentContext = (
   setupContext: SetupContext | null
 ) => {
   const instance = getCurrentInstance() as ComponentInternalInstance;
-
-  if (!instance && process.env.NODE_ENV !== "production") {
-    warn(
-      "defineFunctionComponentContext",
-      "not find current function instance"
-    );
-    return;
-  }
+  if (process.env.NODE_ENV !== "production")
+    if (!instance) {
+      warn(
+        "defineFunctionComponentContext",
+        "not find current function instance"
+      );
+      return;
+    }
 
   let context = functionComponentInstanceMap.get(instance);
 
@@ -213,11 +213,12 @@ const createComponentHandler = (render: any, options: any) => {
   } as DefineFunctionComponentRenderContext;
 
   if (typeof render === "object") {
-    if (process.env.NODE_ENV !== "production" && !isFunction(render.loader)) {
-      warn(
-        "The loader function must be a valid function. but Received:",
-        render.loader
-      );
+    if (!isFunction(render.loader)) {
+      if (process.env.NODE_ENV !== "production")
+        warn(
+          "The loader function must be a valid function. but Received:",
+          render.loader
+        );
       return void 0 as any;
     }
     renderContext.renderFlag = RenderType.ASYNC_FUNCTION;
@@ -269,15 +270,14 @@ const createComponentHandler = (render: any, options: any) => {
           case RenderType.FUNCTION:
             currentRuntimeRenderInstanceContext = currentInstanceContext;
             renderVnode = handleFunctionRender(renderContext, options);
-            if (process.env.NODE_ENV !== "production" && prevQueue !== null) {
-              if (memoizedEffect!.prevLast !== memoizedEffect!.last) {
-                if (process.env.NODE_ENV !== "production")
+            if (process.env.NODE_ENV !== "production")
+              if (prevQueue !== null) {
+                if (memoizedEffect!.prevLast !== memoizedEffect!.last) {
                   throw new Error(
                     "The hook for rendering is different from expected. This may be caused by an unexpected premature return statement."
                   );
-                else throw new Error();
+                }
               }
-            }
             break;
 
           case RenderType.ASYNC_FUNCTION:

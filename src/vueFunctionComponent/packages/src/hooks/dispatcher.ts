@@ -98,9 +98,10 @@ function areDepsChanged(
  */
 function getCurrentContext(): DefineFunctionComponentInstanceContext {
   const ctx = getCurrentFunctionComponentInstance();
-  if (!ctx && process.env.NODE_ENV !== "production") {
-    warn("Hooks can only be called inside function components.");
-  }
+  if (process.env.NODE_ENV !== "production")
+    if (!ctx) {
+      warn("Hooks can only be called inside function components.");
+    }
   return ctx as DefineFunctionComponentInstanceContext;
 }
 
@@ -130,14 +131,14 @@ function initOrReuseHookQueue<T>(
       : NOOP;
 
   // 检查 Hook 调用顺序
-  if (
-    process.env.NODE_ENV !== "production" &&
-    ctx.instance?.isMounted &&
-    ctx.firstRenderFlag === 1 &&
-    memoizedEffect.last === memoizedEffect.prevLast
-  ) {
-    throw new Error(per() as any);
-  }
+  if (process.env.NODE_ENV !== "production")
+    if (
+      ctx.instance?.isMounted &&
+      ctx.firstRenderFlag === 1 &&
+      memoizedEffect.last === memoizedEffect.prevLast
+    ) {
+      throw new Error(per() as any);
+    }
 
   // 初始化队列
   if (!effect) {
@@ -155,22 +156,16 @@ function initOrReuseHookQueue<T>(
       next = memoizedEffect.last.next = create(ctx) as EffectQueue<T>;
       next.lane = lane;
       next.flag = queueFlag;
-    } else if (
-      process.env.NODE_ENV !== "production" &&
-      (next.flag & queueFlag) !== queueFlag
-    ) {
-      throw new Error(per() as any);
+    } else if (process.env.NODE_ENV !== "production") {
+      if ((next.flag & queueFlag) !== queueFlag) throw new Error(per() as any);
     }
     memoizedEffect.last = next;
     return next;
   }
-
-  if (
-    process.env.NODE_ENV !== "production" &&
-    (effect.flag & queueFlag) !== queueFlag
-  ) {
-    throw new Error(per() as any);
-  }
+  if (process.env.NODE_ENV !== "production")
+    if ((effect.flag & queueFlag) !== queueFlag) {
+      throw new Error(per() as any);
+    }
 
   memoizedEffect.last = effect;
   return effect;
