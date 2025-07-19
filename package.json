@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "vue": "^3.4.19",
-    "vue-function-component": "^1.0.0"
+    "vue-function-component": "^1.0.1"
   },
   "devDependencies": {
     "@types/node": "^24.0.7",
