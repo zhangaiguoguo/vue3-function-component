@@ -1,7 +1,7 @@
 <script lang="tsx" setup>
 import { ref } from 'vue';
 import Cc from './components/async/Cc';
-import { useState, markRegularFunctionComponent, useContext, useRef, createJsxFunctionComponent } from 'vue-function-component';
+import { useState, markRegularFunctionComponent, useContext, useRef, createJsxFunctionComponent } from '@/vueFunctionComponent';
 import { C } from './components/context';
 
 const B = ((props: { a: number }) => {
@@ -24,7 +24,7 @@ function Ccc() {
 const A = markRegularFunctionComponent(() => {
   return (<>
     <h1>A</h1>
-    {/* <Cc a={1} b={2}></Cc> */}
+    <Cc a={1} b={2}></Cc>
     <B a={1} />
     <C value={100}>
       <B a={1} />

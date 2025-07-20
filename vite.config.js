@@ -18,7 +18,7 @@ export default defineConfig({
   esbuild: {
     jsxFactory: "h",
     jsxFragment: "Fragment",
-    jsxInject: "import { createJsxFunctionComponent as h, Fragment } from 'vue-function-component'",
+    jsxInject: "import { createJsxFunctionComponent as h, Fragment } from '@/vueFunctionComponent'",
   },
   server: {
     port: 4001,

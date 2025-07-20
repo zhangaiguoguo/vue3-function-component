@@ -113,7 +113,15 @@ const createCurrentContextUpdateHook = () => {
   return () => {
     const e = instance?.effect;
     if (e) {
-      e.dirty = true;
+      const run = e.run;
+      e.run = () => {
+        (e as any)._dirty = false;
+        run.apply(e);
+      };
+      try {
+        e.dirty = true;
+      } catch {}
+      (e as any)._dirty = true;
       if (e.scheduler) {
         e.scheduler();
       } else {
@@ -241,7 +249,7 @@ const createComponentHandler = (render: any, options: any) => {
         prevCurrentRuntimeRenderInstanceContext =
           currentRuntimeRenderInstanceContext!;
       defineFunctionComponentContext(props, context);
-      if (process.env.NODE_ENV !== "production") {
+      if (__DEV__) {
         console.log(currentInstanceContext);
       }
       if (renderContext.renderFlag === RenderType.FUNCTION) {
