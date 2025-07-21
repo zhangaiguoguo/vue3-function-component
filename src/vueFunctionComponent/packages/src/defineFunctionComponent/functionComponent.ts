@@ -210,6 +210,7 @@ export function defineFunctionComponent(render: any, options?: any): any {
   const handler = createComponentHandler(render, options);
 
   handler.$$typeof = __v_FC_component;
+  handler.inheritAttrs = false;
   return handler as any;
 }
 
