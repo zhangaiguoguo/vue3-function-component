@@ -44,6 +44,9 @@ const Button = defineAsyncComponent({
     return import("../components/button.vue");
   },
   timeout: 2000,
+  loadingComponent(){
+    return "<div>Loading Button...</div>";
+  }
 });
 
 console.log(Button);

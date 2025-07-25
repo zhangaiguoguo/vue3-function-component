@@ -4,6 +4,7 @@ import {
   type DefineFunctionComponentInstanceContext,
   getCurrentFunctionComponentInstance,
   inject,
+  isSsr,
 } from "../defineFunctionComponent/index";
 import { EffectFlagName, EffectQueueFlag } from "./hookFlag";
 import { scheduleTask, Priority, cancelDuplicateTask } from "../scheduler";
@@ -612,11 +613,7 @@ export const dispatcherClient = {
 
 let didWarnUncachedGetSnapshot = false;
 
-let isSsr = false;
-
-let dispatcher = (isSsr = typeof window === "undefined")
-  ? Object.assign({}, dispatcherClient)
-  : dispatcherClient;
+let dispatcher = isSsr ? Object.assign({}, dispatcherClient) : dispatcherClient;
 
 if (isSsr) {
   dispatcher.useEffect = NOOP;

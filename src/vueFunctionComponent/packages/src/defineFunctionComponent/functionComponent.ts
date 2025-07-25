@@ -354,10 +354,14 @@ const handleAsyncRender = async (
   let promiseRes,
     componentInstance = getCurrentInstance()!;
   if (isSsr) {
-    renderContext.renderFlag = RenderType.FUNCTION;
-    return h(Suspense,{},{
-      default:{}
-    });
+    // renderContext.renderFlag = RenderType.FUNCTION;
+    // return h(
+    //   Suspense,
+    //   {},
+    //   {
+    //     default: {},
+    //   }
+    // );
   }
   try {
     promiseRes = Promise.resolve(renderContext.loader());
