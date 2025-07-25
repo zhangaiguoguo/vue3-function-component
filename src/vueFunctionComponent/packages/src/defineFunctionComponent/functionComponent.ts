@@ -6,6 +6,7 @@ import {
   warn,
   ExtractPropTypes,
   DefineProps,
+  Suspense,
 } from "vue";
 import { scheduleTask, Priority } from "../scheduler";
 import {
@@ -27,6 +28,8 @@ import {
 import { isFunction } from "../shared";
 import { type LooseRequired, type Prettify } from "@vue/shared";
 import { onUnmounted } from "../lifeCycle";
+
+export const isSsr = typeof window === "undefined";
 
 const __v_FC_component = Symbol.for("vue.function.component");
 const functionComponentInstanceMap = new WeakMap<
@@ -290,7 +293,7 @@ const createComponentHandler = (render: any, options: any) => {
             break;
 
           case RenderType.ASYNC_FUNCTION:
-            handleAsyncRender(renderContext, options);
+            renderVnode = handleAsyncRender(renderContext, options);
 
           case RenderType.LOADING:
             if (renderContext.renderFlag === RenderType.LOADING) {
@@ -350,6 +353,12 @@ const handleAsyncRender = async (
 ) => {
   let promiseRes,
     componentInstance = getCurrentInstance()!;
+  if (isSsr) {
+    renderContext.renderFlag = RenderType.FUNCTION;
+    return h(Suspense,{},{
+      default:{}
+    });
+  }
   try {
     promiseRes = Promise.resolve(renderContext.loader());
     renderContext.renderFlag = RenderType.LOADING;

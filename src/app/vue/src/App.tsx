@@ -10,10 +10,22 @@ function A(props: { a: number }) {
   }, []);
   return (
     <>
+      {count % 2 ? (
+        <>
+          <div>div</div>
+          <p>p</p>
+        </>
+      ) : (
+        <>
+          <p>p</p>
+          <div>div</div>
+        </>
+      )}
       <h1>
         {props.a} - {useMemo(() => count * 2, [count])}
       </h1>
-      <button onClick={() => setCount(count + 1)}>点击{count}</button>
+      <button onClick={() => setCount(count + 1)}>点击++</button>
+      <button onClick={() => setCount(count - 1)}>点击--</button>
     </>
   );
 }

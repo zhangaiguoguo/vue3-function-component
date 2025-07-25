@@ -177,6 +177,9 @@ function createConcurrentDispatch<T>(
   ctx: DefineFunctionComponentInstanceContext,
   lane: number = Priority.NORMAL
 ): Dispatch<SetStateAction<T>> {
+  if (isSsr) {
+    return NOOP;
+  }
   const update = () => {
     ctx.hooks.update();
   };
@@ -226,7 +229,7 @@ export function useEffectImpl(
 }
 
 // === Hooks 实现 ===
-export const dispatcher = {
+export const dispatcherClient = {
   // === useState ===
   useState<T>(initialState: T | (() => T)): [T, Dispatch<SetStateAction<T>>] {
     const ctx = getCurrentContext();
@@ -608,5 +611,16 @@ export const dispatcher = {
 };
 
 let didWarnUncachedGetSnapshot = false;
+
+let isSsr = false;
+
+let dispatcher = (isSsr = typeof window === "undefined")
+  ? Object.assign({}, dispatcherClient)
+  : dispatcherClient;
+
+if (isSsr) {
+  dispatcher.useEffect = NOOP;
+  dispatcher.useLayoutEffect = NOOP;
+}
 
 export default dispatcher;

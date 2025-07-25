@@ -1,6 +1,6 @@
 {
   "name": "vue-function-component",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Vue3 function component is similar to React function component in implementing memory state hooks",
   "main": "src/index",
   "module": "dist/vueFunctionComponent.esm.js",

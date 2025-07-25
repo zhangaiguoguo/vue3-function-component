@@ -36,7 +36,7 @@ export const getComponentDisplayName = (
 ): string => {
   return (
     (options as any)?.name ||
-    (renderContext && renderContext.render.name) ||
+    (renderContext && renderContext.render?.name) ||
     "AnonymousComponent"
   );
 };
